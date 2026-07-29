@@ -5,5 +5,17 @@
   "author": {
     "name": "microsoft/BCQuality",
     "url": "https://github.com/microsoft/BCQuality"
-  }
+  },
+  "repository": "https://github.com/microsoft/BCQuality",
+  "license": "MIT",
+  "keywords": [
+    "bc",
+    "al",
+    "business-central",
+    "code-review",
+    "quality"
+  ],
+  "skills": [
+    "./skills/bcquality-al-review/"
+  ]
 }

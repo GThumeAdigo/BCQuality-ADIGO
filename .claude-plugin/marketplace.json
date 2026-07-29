@@ -9,7 +9,10 @@
       "name": "bcquality",
       "source": "./",
       "description": "Business Central AL quality knowledge base and review skills, packaged as an installable plugin. Ships the entire BCQuality tree (skills, knowledge, tools) so the Entry routing protocol runs against the installed clone.",
-      "version": "0.1.0"
+      "version": "0.1.0",
+      "skills": [
+        "./skills/bcquality-al-review/"
+      ]
     }
   ]
 }
