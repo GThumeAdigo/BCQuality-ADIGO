@@ -24,8 +24,8 @@ Do **not** use this skill to *generate* AL code — it only reviews.
 
 ## Plugin root
 
-Resolve `PLUGIN_ROOT` to the directory that contains this plugin's
-`.claude-plugin/plugin.json`. This skill lives at
+Resolve `PLUGIN_ROOT` to the directory that contains this plugin's root
+`plugin.json`. This skill lives at
 `PLUGIN_ROOT/skills/bcquality-al-review/SKILL.md`, so `PLUGIN_ROOT` is two levels up
 from this file. All paths below are relative to `PLUGIN_ROOT`. If the host exposes a
 plugin-root environment variable, prefer it.
@@ -93,7 +93,8 @@ caller can log the reason.
   `enabled-layers` (`BCQUALITY_ENABLED_LAYERS`) — the denied layers' files still exist on
   disk. Treat `enabled-layers` as a selection filter, not a hard security boundary. A
   future revision could add a genuine deny mechanism (e.g. pruning the installed tree).
-- **Manifest location.** This plugin uses `.claude-plugin/plugin.json`, which both
+- **Manifest location.** This plugin's manifest is the root `plugin.json`, which both
   Claude Code and Copilot CLI accept (verified with Copilot CLI: `plugin install`
-  reports the bridge skill loaded). Copilot CLI also accepts a root `plugin.json`; if a
-  future host only reads the root form, dual-home the manifest.
+  reports the bridge skill loaded). A `.claude-plugin/marketplace.json` alongside it
+  carries the marketplace entry. Claude Code also reads `.claude-plugin/plugin.json`; if
+  a future host only reads that form, dual-home the manifest there.
