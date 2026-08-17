@@ -11,7 +11,7 @@ application-area: [all]
 
 ## Description
 
-`DataClassification` tells the platform what kind of data a table field stores so that telemetry, GDPR data-subject requests, and the platform's audit surfaces can treat it correctly. A field can declare its own value or inherit the table-level value. When neither scope supplies a valid classification, the field remains `ToBeClassified` — a placeholder meaning "not yet reviewed", not a safe default. Leaving a field that actually holds PII (an email address, a customer name, an employee code) as `ToBeClassified`, or classifying it as `SystemMetadata` ("no user or customer data"), are both under-classifications and privacy bugs, even though the code still compiles.
+`DataClassification` tells the platform what kind of data a table field stores so that telemetry, GDPR data-subject requests, and the platform's audit surfaces can treat it correctly. A field declared inside a table object can set its own value or inherit a valid table-level value; a field added by a `tableextension` has no table-level value to inherit and must always set its own. When neither scope supplies a valid classification, the field remains `ToBeClassified` — a placeholder meaning "not yet reviewed", not a safe default. Leaving a field that actually holds PII (an email address, a customer name, an employee code) as `ToBeClassified`, or classifying it as `SystemMetadata` ("no user or customer data"), are both under-classifications and privacy bugs, even though the code still compiles.
 
 ## Best Practice
 
