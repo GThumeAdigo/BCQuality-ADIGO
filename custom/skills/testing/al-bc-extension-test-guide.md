@@ -22,7 +22,7 @@ An orchestrator invokes this skill with a `repository` (audit the whole extensio
 
 The rule set is the test-guide exhaustiveness contract: the twelve fixed categories and the per-category inventory requirements that map every AL artifact to a category. Where a category maps onto a curated BCQuality rule (subpage FK persistence, permission boundaries, cross-company isolation, upgrade paths), read the BCQuality knowledge index once and take the `testing`, `security`, and `upgrade` domain entries as the citable candidate set across every enabled layer; do not open an article's body until it enters the Worklist. The category-coverage and inventory-completeness rules are not covered by the corpus; for a concrete gap there, emit an agent finding within this skill's test-guide-coverage domain.
 
-A worked example is shipped at `examples/elevate-shipping-TEST_GUIDE.md` in this skill folder. It shows the inventory granularity expected; it is for that extension only, so the structure transfers but every inventory row must come from the target extension's AL.
+A worked example is shipped at `examples/elevate-shipping-TEST_GUIDE.txt` in this skill folder. It shows the inventory granularity expected; it is for that extension only, so the structure transfers but every inventory row must come from the target extension's AL.
 
 ## Relevance
 
