@@ -11,12 +11,12 @@ technologies: [al]
 countries: [w1]
 application-area: [all]
 sub-skills:
-  - custom/skills/review/al-multitenancy-reviewer.md
-  - custom/skills/review/al-permission-set-auditor.md
-  - custom/skills/review/al-event-subscriber-auditor.md
-  - custom/skills/review/al-obsolete-tracker.md
-  - custom/skills/review/al-integration-pattern-reviewer.md
-  - custom/skills/review/al-upgrade-checker.md
+  - custom/skills/review/al-multitenancy-review.md
+  - custom/skills/review/al-permission-set-review.md
+  - custom/skills/review/al-event-subscriber-review.md
+  - custom/skills/review/al-obsolete-tracker-review.md
+  - custom/skills/review/al-integration-pattern-review.md
+  - custom/skills/review/al-upgrade-review.md
 ---
 
 # AL extended review
@@ -29,12 +29,12 @@ Run this alongside the platform `al-code-review` (which covers performance, secu
 
 The sub-skills invoked are exactly those listed in frontmatter `sub-skills`:
 
-- `custom/skills/review/al-multitenancy-reviewer.md`
-- `custom/skills/review/al-permission-set-auditor.md`
-- `custom/skills/review/al-event-subscriber-auditor.md`
-- `custom/skills/review/al-obsolete-tracker.md`
-- `custom/skills/review/al-integration-pattern-reviewer.md`
-- `custom/skills/review/al-upgrade-checker.md`
+- `custom/skills/review/al-multitenancy-review.md`
+- `custom/skills/review/al-permission-set-review.md`
+- `custom/skills/review/al-event-subscriber-review.md`
+- `custom/skills/review/al-obsolete-tracker-review.md`
+- `custom/skills/review/al-integration-pattern-review.md`
+- `custom/skills/review/al-upgrade-review.md`
 
 Additional leaves are added by editing this list; the skill does not discover sub-skills implicitly. Composition is flat: every entry is a leaf skill, never another super-skill.
 
