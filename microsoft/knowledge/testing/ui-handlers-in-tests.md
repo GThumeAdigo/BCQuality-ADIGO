@@ -19,10 +19,10 @@ Getting the handler *present* is only half the job; the handler must also verify
 
 Make the test own the expectations and the handlers consume them. Before acting, the test `Enqueue`s — in interaction order — the expected text (a stable substring) and any reply each handler must return. The handler `Dequeue`s the expected text, verifies it with the purpose-built asserts (`Assert.ExpectedMessage`, `Assert.ExpectedConfirm`, `Assert.ExpectedStrMenu` — which match on a fragment, not the full localized caption), then `Dequeue`s and returns its reply. Finish the test body with `LibraryVariableStorage.AssertEmpty` to prove every enqueued interaction fired exactly once, and start each test with an `Initialize` that calls `LibraryVariableStorage.Clear` so a value leaked by an earlier test cannot cascade. List in `[HandlerFunctions]` precisely the handlers the scenario triggers — no superset "just in case", no subset that happens to work today.
 
-See sample: `ui-handlers-in-tests.good.al`.
+See sample: `ui-handlers-in-tests.good.al.txt`.
 
 ## Anti Pattern
 
 Omitting a handler for a UI call the path raises (unhandled-UI abort), padding the list with a handler the path never reaches ("handler function was not executed"), or writing handlers that hardcode their answer and assert inline with no enqueue/dequeue. The last is the subtle one: nothing proves the correct dialog fired the expected number of times, and an inline assertion that fails inside a handler can be swallowed by the calling UI operation, leaving the suite green while the behavior is broken. Skipping `Initialize`/`AssertEmpty` hides both a leaked queue and a missing or extra dialog.
 
-See sample: `ui-handlers-in-tests.bad.al`.
+See sample: `ui-handlers-in-tests.bad.al.txt`.

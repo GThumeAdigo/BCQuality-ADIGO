@@ -123,17 +123,17 @@ Knowledge files MUST NOT contain fenced code blocks. When an article needs to sh
 
 ```
 <layer>/knowledge/<domain>/<slug>.md         # the article
-<layer>/knowledge/<domain>/<slug>.good.al    # best-practice demonstration
-<layer>/knowledge/<domain>/<slug>.bad.al     # anti-pattern demonstration
+<layer>/knowledge/<domain>/<slug>.good.al.txt    # best-practice demonstration
+<layer>/knowledge/<domain>/<slug>.bad.al.txt     # anti-pattern demonstration
 ```
 
 Rules:
 
 - A sample file is identified by the article's slug followed by a `.<kind>.<ext>` suffix. The supported kinds are `good` and `bad`. Additional kinds MAY be introduced by a layer; consumers MUST ignore unknown kinds without failing.
 - The extension matches the technology (`al`, `ps1`, `js`, `kql`, …). A single article MAY carry samples in multiple technologies if the article's frontmatter `technologies` lists them.
-- Articles MAY have a `good` sample only, a `bad` sample only, both, or neither. The article text SHOULD reference each sample it ships, using a relative path like `` `<slug>.good.al` ``.
+- Articles MAY have a `good` sample only, a `bad` sample only, both, or neither. The article text SHOULD reference each sample it ships, using a relative path like `` `<slug>.good.al.txt` ``.
 - Samples are **demonstration-only**. They are not deployed, not compiled as part of a published app, and not derived from the Business Central base application source. Each sample is self-contained and exists purely to make the accompanying article concrete for humans and agents.
-- Layer precedence applies to sample files the same way it applies to articles: a `/custom/knowledge/<domain>/<slug>.good.al` overrides a `/microsoft/knowledge/<domain>/<slug>.good.al` for the same article in the same layer hierarchy.
+- Layer precedence applies to sample files the same way it applies to articles: a `/custom/knowledge/<domain>/<slug>.good.al.txt` overrides a `/microsoft/knowledge/<domain>/<slug>.good.al.txt` for the same article in the same layer hierarchy.
 
 Consumers that surface sample code to an end user or agent SHOULD cite the sample file by its repo-relative path, in the same format as article citations.
 

@@ -21,10 +21,10 @@ The same rule applies to all object types that own behavior: codeunits, pages, t
 
 Move every `Label` to the object's top-level `var` block. Use the appropriate suffix (`Msg`, `Err`, `Qst`, `Lbl`, `Tok`, `Txt`) on the variable name so reviewers and the translation team can see at a glance what role the string plays. Pair non-translatable strings (URLs, JSON/XML fragments, integration tokens) with `Locked = true`, as covered by `label-locked-for-non-translatable.md`.
 
-See sample: `labels-declared-at-object-scope.good.al`.
+See sample: `labels-declared-at-object-scope.good.al.txt`.
 
 ## Anti Pattern
 
 Declaring `Label` inside a procedure-local `var` block — `procedure Lookup() var GreetingMsg: Label 'Hello %1';` — couples the translatable string to one procedure, hides it from object-level review, and depends on a translation pipeline behavior that is not part of the AL language contract.
 
-See sample: `labels-declared-at-object-scope.bad.al`.
+See sample: `labels-declared-at-object-scope.bad.al.txt`.

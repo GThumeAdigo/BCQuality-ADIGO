@@ -19,10 +19,10 @@ application-area: [all]
 
 Use filtered `DeleteAll(false)` for purpose-built staging or cleanup tables only after verifying that base-table `OnDelete` logic is unnecessary and installed extensions, subscribers, global triggers, and media fields do not add required per-row behavior or regress the bulk path. If deletion requires per-row business logic, keep an explicit triggered operation instead of simulating trigger execution separately.
 
-See sample: `use-deleteall-for-filtered-bulk-deletion.good.al`.
+See sample: `use-deleteall-for-filtered-bulk-deletion.good.al.txt`.
 
 ## Anti Pattern
 
 Iterating with `FindSet` + `Delete(false)` to clear a filtered staging batch that has no delete logic. The reverse mistake is assuming `DeleteAll` is always one SQL statement without checking table extensions and subscribers.
 
-See sample: `use-deleteall-for-filtered-bulk-deletion.bad.al`.
+See sample: `use-deleteall-for-filtered-bulk-deletion.bad.al.txt`.

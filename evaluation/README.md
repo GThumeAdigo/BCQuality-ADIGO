@@ -1,6 +1,6 @@
 # AL review evaluation
 
-The evaluation is convention-driven. For every `microsoft/skills/review/al-<domain>-review.md` leaf, the harness finds `microsoft/knowledge/<domain>/`, selects the first article (by filename) with both `.bad.al` and `.good.al` companions, and derives the expected positive and clean control automatically. Adding a conforming leaf requires no scoring-contract edit.
+The evaluation is convention-driven. For every `microsoft/skills/review/al-<domain>-review.md` leaf, the harness finds `microsoft/knowledge/<domain>/`, selects the first article (by filename) with both `.bad.al.txt` and `.good.al.txt` companions, and derives the expected positive and clean control automatically. Adding a conforming leaf requires no scoring-contract edit.
 
 `review-fixtures.json` contains only global thresholds and optional exceptional overrides. An override may select a different article or add context when the generic convention cannot express a scenario. It should remain empty in the normal case.
 

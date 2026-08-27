@@ -21,10 +21,10 @@ AA0218 is a compiler analyzer, but its severity is configured per app in the rul
 
 Every field control on a regular page carries `ToolTip = 'Specifies …';` (or a clear alternative phrasing). Compose the text in the form "what this value shows" rather than "what the user does with it". In review, raise a `medium`-severity finding for a field that has neither an inline nor an inherited tooltip, independently of whether AA0218 is active in the app's ruleset.
 
-See sample: `tooltip-required-on-page-fields.good.al`.
+See sample: `tooltip-required-on-page-fields.good.al.txt`.
 
 ## Anti Pattern
 
 A field control with no `ToolTip` property at all, or `ToolTip = '';`. AA0218 flags both; the hover state is blank and the screen reader has nothing to announce.
 
-See sample: `tooltip-required-on-page-fields.bad.al`.
+See sample: `tooltip-required-on-page-fields.bad.al.txt`.

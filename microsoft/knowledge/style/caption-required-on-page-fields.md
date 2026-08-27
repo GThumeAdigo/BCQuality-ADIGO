@@ -19,10 +19,10 @@ Acceptable exceptions: a field whose caption is inherited via `CaptionClass = '3
 
 `Caption = 'Customer No.';` paired with `ToolTip = 'Specifies …';`. Captions are short, noun-phrase, title-case for primary labels; sentence-case is allowed for descriptive labels that read as a sentence fragment.
 
-See sample: `caption-required-on-page-fields.good.al`.
+See sample: `caption-required-on-page-fields.good.al.txt`.
 
 ## Anti Pattern
 
 A field control with no `Caption` and no `CaptionClass`, or `Caption = '';`. The user sees the internal identifier as the column header and the translation pipeline has nothing to translate.
 
-See sample: `caption-required-on-page-fields.bad.al`.
+See sample: `caption-required-on-page-fields.bad.al.txt`.

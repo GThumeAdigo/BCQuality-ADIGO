@@ -153,13 +153,13 @@ foreach ($domain in $leafDomains) {
         $selectedArticle = Get-ChildItem -LiteralPath $knowledgeDirectory -File -Filter '*.md' |
             Sort-Object Name |
             Where-Object {
-                (Test-Path -LiteralPath (Join-Path $knowledgeDirectory "$($_.BaseName).good.al") -PathType Leaf) -and
-                (Test-Path -LiteralPath (Join-Path $knowledgeDirectory "$($_.BaseName).bad.al") -PathType Leaf)
+                (Test-Path -LiteralPath (Join-Path $knowledgeDirectory "$($_.BaseName).good.al.txt") -PathType Leaf) -and
+                (Test-Path -LiteralPath (Join-Path $knowledgeDirectory "$($_.BaseName).bad.al.txt") -PathType Leaf)
             } |
             Select-Object -First 1
     }
     if (-not $selectedArticle) {
-        $problems.Add("${domain}: no article has both .good.al and .bad.al companion samples.") | Out-Null
+        $problems.Add("${domain}: no article has both .good.al.txt and .bad.al.txt companion samples.") | Out-Null
         continue
     }
 
@@ -173,7 +173,7 @@ foreach ($domain in $leafDomains) {
         $case = [pscustomobject]@{
             id = "$domain-$kind"
             domain = $domain
-            input = "microsoft/knowledge/$domain/$($selectedArticle.BaseName).$kind.al"
+            input = "microsoft/knowledge/$domain/$($selectedArticle.BaseName).$kind.al.txt"
             expected = if ($kind -eq 'bad') { @($articlePath) } else { @() }
         }
         if ($context) {
@@ -274,7 +274,9 @@ if ($PrepareDirectory) {
     $requestCasesByDomain = @{}
     $manifestCaseByModelId = @{}
     foreach ($case in $cases) {
-        $extension = [System.IO.Path]::GetExtension([string]$case.input)
+        # Companion samples are stored as *.al.txt so the AL compiler in consuming
+        # repos does not pick them up. Model-facing fixtures still get a .al name.
+        $extension = '.al'
         $modelId = Get-ModelCaseId -ManifestId ([string]$case.id)
         $neutralName = "$modelId$extension"
         $sourceText = Get-Content -LiteralPath (Join-Path $Root ([string]$case.input)) -Raw
@@ -341,7 +343,7 @@ if ($PrepareDirectory) {
             }
             $rankedArticles = @(Get-RankedArticles -Articles $domainArticles -CaseText $caseText)
             $manifestCase = $manifestCaseByModelId[[string]$requestCase.id]
-            $selectedArticlePath = ([string]$manifestCase.input) -replace '\.(?:good|bad)\.al$', '.md'
+            $selectedArticlePath = ([string]$manifestCase.input) -replace '\.(?:good|bad)\.al\.txt$', '.md'
             $rankedPaths = @($rankedArticles | ForEach-Object { [string]$_.path })
             if ($rankedPaths -notcontains $selectedArticlePath) {
                 throw "$($manifestCase.id): deterministic ranking omitted selected article '$selectedArticlePath'. Improve its retrieval metadata or choose an exceptional override article."

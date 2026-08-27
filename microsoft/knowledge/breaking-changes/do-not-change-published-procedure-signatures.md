@@ -17,10 +17,10 @@ A procedure that is reachable from outside its object — any procedure not mark
 
 Treat a published signature as frozen. When new behavior needs more inputs, add a new procedure or overload alongside the original — for example a `CalculateDiscountWithRate(Amount; Rate)` next to the unchanged `CalculateDiscount(Amount)` — and let the old one delegate to the new one. Existing callers keep compiling; new callers opt into the richer entry point. Naming an unnamed return value is the one in-place change that is always safe.
 
-See sample: `do-not-change-published-procedure-signatures.good.al`.
+See sample: `do-not-change-published-procedure-signatures.good.al.txt`.
 
 ## Anti Pattern
 
 Editing the existing public procedure's parameter list — here, adding a `Rate` parameter to `CalculateDiscount` — so every dependent extension that called the old form fails to compile. Detection: a parameter added, removed, reordered, retyped, or flipped to/from `var`, or a changed return type, on any non-`local` procedure that already shipped. Add a new overload instead.
 
-See sample: `do-not-change-published-procedure-signatures.bad.al`.
+See sample: `do-not-change-published-procedure-signatures.bad.al.txt`.

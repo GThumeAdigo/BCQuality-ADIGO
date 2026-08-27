@@ -58,7 +58,7 @@ Custom `##` sections are permitted when they serve the concern (for example, `##
 
 ## No fenced code blocks
 
-Knowledge files do not contain code. Samples live as **sibling files** next to the article — `<slug>.good.al`, `<slug>.bad.al`, etc. — in the same knowledge-layer folder. See `skills/read.md` for the full convention. This keeps knowledge files retrieval-friendly and prevents code from drifting out of sync with BC platform changes buried inside prose.
+Knowledge files do not contain code. Samples live as **sibling files** next to the article — `<slug>.good.al.txt`, `<slug>.bad.al.txt`, etc. — in the same knowledge-layer folder. See `skills/read.md` for the full convention. This keeps knowledge files retrieval-friendly and prevents code from drifting out of sync with BC platform changes buried inside prose.
 
 ## Choosing frontmatter values
 
@@ -108,6 +108,6 @@ Before opening a pull request:
 - File is in the correct layer and domain folder.
 - Name is kebab-case and descriptive.
 - Every companion sample is referenced by filename from the article, and every referenced sample exists.
-- Every review-leaf domain has at least one article with both `.good.al` and `.bad.al` companions; the evaluation harness derives positive and clean controls from that convention automatically.
+- Every review-leaf domain has at least one article with both `.good.al.txt` and `.bad.al.txt` companions; the evaluation harness derives positive and clean controls from that convention automatically.
 
 Agents scaffolding new files SHOULD run this checklist programmatically before emitting the file.

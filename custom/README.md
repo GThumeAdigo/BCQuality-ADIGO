@@ -26,7 +26,7 @@ This layer was seeded by migrating the Business Central AL assets from the `comm
 | `process` | 1 | Mapping each feature to a reserved AL object ID range during planning. |
 | `performance` | 1 | Profiling before optimising with the built-in Performance Profiler. |
 
-Most integration articles ship `.good.al` / `.bad.al` companion samples.
+Most integration articles ship `.good.al.txt` / `.bad.al.txt` companion samples.
 
 ### Skills (`custom/skills/`)
 

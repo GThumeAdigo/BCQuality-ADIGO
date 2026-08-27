@@ -119,7 +119,7 @@ For the end-to-end flow — from orchestrator trigger through to how output reac
 ├── /.github/             # Actions and workflows
 ├── /microsoft/           # Microsoft-endorsed layer
 │   ├── /knowledge/       # Knowledge files by domain
-│   │   └── /<domain>/    # Each article: <slug>.md + optional <slug>.good.al / <slug>.bad.al
+│   │   └── /<domain>/    # Each article: <slug>.md + optional <slug>.good.al.txt / <slug>.bad.al.txt
 │   └── /skills/          # Microsoft-endorsed action skills
 ├── /community/           # BC community layer
 │   ├── /knowledge/       # Knowledge files by domain
