@@ -83,7 +83,7 @@ $expectedFilteredPaths = @(
     }
 )
 $actualFilteredPaths = @($filteredIndex.articles | ForEach-Object path)
-if ((Compare-Object $expectedFilteredPaths $actualFilteredPaths).Count) {
+if (@(Compare-Object $expectedFilteredPaths $actualFilteredPaths).Count) {
     $problems.Add('Filtered index article set does not exactly match the enabled layers.') | Out-Null
 }
 if ([string]::IsNullOrWhiteSpace([string]$filteredIndex.sourceTreeDigest)) {
