@@ -4,10 +4,10 @@ id: al-translation-auditor
 version: 1
 title: AL translation coverage audit
 description: Audits AL source strings against xliff files and the supported countries declared in AppSourceCop.json, and emits a findings report.
-inputs: [repository, object-list]
+inputs: [repository, object-list, deployment-context]
 outputs: [findings-report]
 bc-version: [all]
-technologies: [al]
+technologies: [al, xml, json]
 countries: [w1]
 application-area: [all]
 ---
@@ -16,7 +16,7 @@ application-area: [all]
 
 Compares every `Label`, `Caption`, `ToolTip`, `Comment`, and `Description` string in the AL source against the xliff files under the translations folder and against the `supportedCountries` declared in `AppSourceCop.json`. It catches the silent failure where an extension claims to support a market but ships only en-US text, one of the top AppSource rejection reasons. The skill checks one xliff per supported locale, every source string present and translated in every xliff, empty and verbatim targets, orphan trans-units, translator comments on substituted labels, and truncation risk. It sources from the `style` knowledge domain and cites curated label and caption rules where present; coverage gaps the corpus does not encode are agent findings within its translation domain. This is a leaf action skill: it invokes no sub-skills.
 
-An orchestrator invokes this skill with a `repository` or an `object-list`. It produces a single JSON document conforming to the DO output contract.
+An orchestrator invokes this skill with a `repository` or an `object-list`. Set `task-context.review-deployed-locales: true` when deployed locale or fallback behavior is in scope and supply `deployment-context`. That object has exactly these review fields: `deployed-locales` (locale codes enabled in the target environment), `default-locale`, and `locale-fallbacks` (a mapping from requested locale to fallback locale). It produces a single JSON document conforming to the DO output contract.
 
 ## Source
 
@@ -27,7 +27,7 @@ Read the BCQuality knowledge index once (the `knowledge-index.json` Entry's prep
 Apply the frontmatter matching rules defined in READ against the task context:
 
 - `bc-version`: the target BC version from the branch `app.json`, or `unknown` if unavailable.
-- `technologies`: `[al]`.
+- `technologies`: the intersection of `[al, xml, json]` present in AL, XLIFF, and AppSource configuration.
 - `countries`: the consuming app's declared countries (the `supportedCountries` from `AppSourceCop.json`), or `unknown`.
 - `application-area`: the application areas of the changed objects, or `unknown`.
 
@@ -39,12 +39,13 @@ Build the string-to-translation map and narrow to the gaps:
 
 - Walk the AL source (or supplied `object-list`) for every `Label`, `Caption`, `ToolTip`, `Comment`, and `Description`. Walk every `*.xlf` or `*.xliff` under the translations folder. Read the `supportedCountries` array from `AppSourceCop.json`.
 - Each `supportedCountries` locale with no matching xliff file; each source string with no `<trans-unit>` in a non-default xliff or no `<target>` element; empty `<target>` elements; non-en-US targets identical to the source with no `state="needs-review"` or justifying note; orphan trans-units that match no source string; labels with `%1`/`%2` substitutions whose `Comment` is missing or did not round-trip into the xliff `note`; targets whose length exceeds the source caption's apparent `MaxLength`.
+- Deployment configuration for each supported locale: verify the locale is actually enabled in the target environment and that any intentional fallback chain is explicit, resolves to a shipped xliff, and does not silently substitute an unrelated regional language.
 
 A curated `style` file enters the worklist when its `keywords` intersect these tokens (for example `label`, `caption`, `comment`, `translation`, `placeholder`). Read its full body only after it makes the worklist. Resolve layer-precedence conflicts per READ and record dropped files in `suppressed`.
 
 ## Action
 
-For each gap, emit a finding.
+For each gap, emit a finding. When `task-context.review-deployed-locales` is `true` but `deployment-context` is absent or omits `deployed-locales`, `default-locale`, or `locale-fallbacks`, return `partial` with the absent object or exact missing fields in `outcome-reason`; source/XLIFF findings already established remain reliable. When the flag is absent or false, deployed-locale checks are outside the requested scope.
 
 When the gap maps onto a curated `style` rule (a substituted label with no explanatory `Comment`, a `Caption` missing its `Comment`), emit a knowledge-backed finding citing that file: `id` equal to the file path, the file as primary reference, `severity` up to `blocker` only when the file states a platform-level guarantee otherwise `major`, `confidence` `high` for an unambiguous match.
 
@@ -52,7 +53,7 @@ When the gap is a coverage defect with no curated rule (a missing xliff for a su
 
 Set `domain` to `Translation` on every finding. Set `suggested-code` only when the fix is an exact, contiguous edit to an AL source string (adding a `Comment` attribute to a label); a missing or untranslated xliff is not a single-line source replacement, so set `suggested-code-omission-reason` (for example `requires generating and translating an xliff file`). Do not emit findings for satisfied rules; compliant worklist items contribute only to coverage.
 
-Outcome selection: `completed` when every supported locale and source string was evaluated (including an empty `findings`); `no-knowledge` when no curated knowledge survived and no agent finding was raised; `not-applicable` when the task has no source strings or translations to compare; `partial` or `failed` per the DO contract with `outcome-reason`.
+Outcome selection: `completed` when every supported locale and source string was evaluated and any requested deployment scope had complete context; `not-applicable` when the task has no source strings or translations; `partial` when deployed locale/fallback scope was requested without complete deployment context or another subset was unevaluated; `failed` when supplied artifacts cannot be read.
 
 ## Output
 

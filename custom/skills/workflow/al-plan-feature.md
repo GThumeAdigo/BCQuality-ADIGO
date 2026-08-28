@@ -1,9 +1,9 @@
 ---
 kind: action-skill
-id: plan-feature
+id: portable-plan-feature
 version: 2
 title: Feature Plan Review
-description: Reviews a Business Central feature plan and task list for traceability, feasible AL design, object allocation, and deployment-aware schema handling, and emits a findings report.
+description: Portable review of supplied Business Central feature-plan artifacts; it checks traceability and AL feasibility without defining scaffold governance.
 inputs: [repository, deployment-context]
 outputs: [findings-report]
 bc-version: [all]
@@ -51,7 +51,7 @@ Output conforms to the DO output contract. Example knowledge-backed finding:
 
 ```json
 {
-  "skill": { "id": "plan-feature", "version": 2 },
+  "skill": { "id": "portable-plan-feature", "version": 2 },
   "outcome": "completed",
   "summary": {
     "counts": { "blocker": 0, "major": 1, "minor": 0, "info": 0 },

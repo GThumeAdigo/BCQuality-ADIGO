@@ -87,6 +87,22 @@ if (-not $IndexPath) {
     $IndexPath = Join-Path $BCQualityRoot 'knowledge-index.json'
 }
 
+$knownLayers = @('microsoft', 'community', 'custom')
+if ($EnabledLayers) {
+    $duplicateLayers = @($EnabledLayers | Group-Object | Where-Object Count -gt 1 | ForEach-Object Name)
+    if ($duplicateLayers.Count -gt 0) {
+        throw "Duplicate enabled layer(s): $($duplicateLayers -join ', ')"
+    }
+    $unknownLayers = @($EnabledLayers | Where-Object { $_ -notin $knownLayers })
+    if ($unknownLayers.Count -gt 0) {
+        throw "Unknown enabled layer(s): $($unknownLayers -join ', ')"
+    }
+    $effectiveLayers = @($knownLayers | Where-Object { $_ -in $EnabledLayers })
+}
+else {
+    $effectiveLayers = @($knownLayers | Where-Object { Test-Path (Join-Path $BCQualityRoot $_) })
+}
+
 function Get-RelativePath {
     param([string] $Root, [string] $Full)
     $rel = $Full.Substring($Root.Length).TrimStart([char]'/', [char]'\')
@@ -182,14 +198,16 @@ function ConvertFrom-ArticleFrontmatter {
 # is restricted to those layers (a consumer reproduces its filtered view); the
 # article set otherwise reflects whatever is present on disk.
 $indexArticles = [System.Collections.Generic.List[object]]::new()
-foreach ($layerDir in @('microsoft', 'community', 'custom')) {
+$indexedSourceFiles = [System.Collections.Generic.List[object]]::new()
+foreach ($layerDir in $knownLayers) {
     $kbRoot = Join-Path $BCQualityRoot (Join-Path $layerDir 'knowledge')
     if (-not (Test-Path $kbRoot)) { continue }
-    if ($EnabledLayers -and ($EnabledLayers -notcontains $layerDir)) { continue }
+    if ($effectiveLayers -notcontains $layerDir) { continue }
 
     Get-ChildItem -LiteralPath $kbRoot -Recurse -File -Filter '*.md' -ErrorAction SilentlyContinue |
         Sort-Object FullName |
         ForEach-Object {
+            $indexedSourceFiles.Add($_) | Out-Null
             $rel = Get-RelativePath -Root $BCQualityRoot -Full $_.FullName
             $parsed = $null
             try { $parsed = ConvertFrom-ArticleFrontmatter -Path $_.FullName } catch { $parsed = $null }
@@ -221,10 +239,32 @@ foreach ($layerDir in @('microsoft', 'community', 'custom')) {
         }
 }
 
+$digestStream = [System.IO.MemoryStream]::new()
+$utf8 = [System.Text.UTF8Encoding]::new($false)
+try {
+    foreach ($sourceFile in @($indexedSourceFiles | Sort-Object { Get-RelativePath -Root $BCQualityRoot -Full $_.FullName })) {
+        $relativeBytes = $utf8.GetBytes((Get-RelativePath -Root $BCQualityRoot -Full $sourceFile.FullName))
+        $digestStream.Write($relativeBytes, 0, $relativeBytes.Length)
+        $digestStream.WriteByte(0)
+        $contentBytes = [System.IO.File]::ReadAllBytes($sourceFile.FullName)
+        $digestStream.Write($contentBytes, 0, $contentBytes.Length)
+        $digestStream.WriteByte(0)
+    }
+    $sha256 = [System.Security.Cryptography.SHA256]::Create()
+    try {
+        $sourceTreeDigest = ([System.BitConverter]::ToString($sha256.ComputeHash($digestStream.ToArray())) -replace '-', '').ToLowerInvariant()
+    } finally {
+        $sha256.Dispose()
+    }
+} finally {
+    $digestStream.Dispose()
+}
+
 $index = [pscustomobject]@{
-    version       = 1
+    version       = 2
     generatedAt   = (Get-Date).ToUniversalTime().ToString('o')
-    enabledLayers = @($EnabledLayers)
+    sourceTreeDigest = $sourceTreeDigest
+    enabledLayers = @($effectiveLayers)
     knowledgeAllow= @($KnowledgeAllow)
     knowledgeDeny = @($KnowledgeDeny)
     articleCount  = $indexArticles.Count

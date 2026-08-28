@@ -7,7 +7,7 @@ description: Reviews Business Central Copilot and agent test suites against the 
 inputs: [pr-diff, file-path, repository]
 outputs: [findings-report]
 bc-version: [all]
-technologies: [al]
+technologies: [al, json, xml]
 countries: [w1]
 application-area: [all]
 ---
@@ -36,7 +36,7 @@ Reference material the rules derive from:
 Apply the frontmatter matching rules defined in READ against the task context:
 
 - `bc-version` - the target BC version from the test app's `app.json`, or `unknown` if unavailable.
-- `technologies` - `[al]`.
+- `technologies` - the intersection of `[al, json, xml]` present in tests, datasets, and suite definitions.
 - `countries` - the countries declared in the consuming app's `app.json`; default to the orchestrator's configured context, else `unknown`.
 - `application-area` - the union of application areas exercised by the tested Copilot capability or agent; pass the actual set, do not substitute `[all]`.
 
@@ -63,12 +63,11 @@ Narrow to the rules that apply to the test artifacts under review. A rule enters
 
 For each worklist item, evaluate the test artifacts and emit findings:
 
-- An agent test codeunit missing `RequiredTestIsolation = Disabled` (or `TestType` not `AITest`), or an agent dataset shipped as JSONL, is a `blocker`: the suite cannot run correctly. A validator that calls `Error()` instead of returning `false` with an `ErrorReason`, breaking the `FinalizeTurn` loop contract, is also a `blocker`.
-- A turn that declares `intervention_request` whose agent path cannot pause with the matching type/suggestions, an unquoted `$DateFormula-...$` placeholder, a `query.intervention` that sets both `suggestion` and `instruction`, or a suite XML using a `TestRunnerId` other than `130451` for an agent test, is `major`.
+- Missing isolation, invalid dataset shape, validator-contract, intervention, placeholder, and runner-id defects found by source review are capped agent findings unless a curated rule applies. A named test runner's direct refusal or failed execution is separate deterministic evidence with a stable suite/test occurrence key and may gate.
 - A missing **Reset Suite Setup** step after editing setup YAML (new setup silently ignored), confusing AI-evaluator tokens with runtime tokens when budgeting credits, or a missing `Sensitive` flag on a dataset that carries PII, is `minor`.
-- When a rule is clearly applicable but no violation is detected, emit `info` citing the rule.
+- Record satisfied test-design checks in summary coverage; do not emit findings for them.
 
-Cite a `testing` or `style` knowledge file in `references` when one matches; otherwise emit an agent finding within this skill's domain (`references: []`, `id` prefixed `agent:`, severity capped at `minor` per `skills/do.md`). Set `confidence` to `high` for unambiguous attribute or token matches, `medium` for heuristic detections or when any frontmatter dimension was `unknown`, and `low` for applicability-only advisories. Provide `findings[].suggested-code` for mechanical fixes (add `RequiredTestIsolation = Disabled;`, quote a date placeholder, set `TestRunnerId="130451"`); otherwise set `suggested-code-omission-reason`. BC-Bench (April 2026 GA) is out of scope for project-specific tests and must not be flagged here. See `skills/do.md` for the full contract.
+Cite a `testing` or `style` knowledge file when one matches; otherwise emit a capped agent finding. `high` confidence is available only to unambiguous knowledge-backed findings or deterministic tool observations; agent findings remain at `medium` or lower. Provide `suggested-code` for mechanical fixes. BC-Bench (April 2026 GA) is out of scope for project-specific tests and must not be flagged here.
 
 Outcome selection: `completed` when every worklist item was evaluated (including an empty `findings` array); `no-knowledge` when no applicable rule survived Source, Relevance, and configuration filtering; `not-applicable` when the task context has no Copilot or agent test to review; `partial` when a budget was hit before the worklist was exhausted; `failed` on an unrecoverable error (`outcome-reason` required).
 
@@ -81,26 +80,28 @@ Output conforms to the DO output contract. A populated example:
   "skill": { "id": "al-ai-test-driven-development", "version": 1 },
   "outcome": "completed",
   "summary": {
-    "counts": { "blocker": 1, "major": 1, "minor": 0, "info": 0 },
+    "counts": { "blocker": 0, "major": 0, "minor": 2, "info": 0 },
     "coverage": { "worklist-size": 5, "items-evaluated": 5 }
   },
   "findings": [
     {
       "id": "agent:agent-test-missing-disabled-isolation",
-      "severity": "blocker",
+      "severity": "minor",
       "message": "Codeunit 50200 is an agent test (TestType = AITest, drives Library - Agent turns) but does not set RequiredTestIsolation = Disabled. Agent tasks run in a separate session and span transactions, so the suite cannot run. Recommendation: add RequiredTestIsolation = Disabled; to the codeunit properties.",
       "location": { "file": "test/MyAgentAccuracy.Codeunit.al", "line": 4 },
       "references": [],
-      "confidence": "high",
+      "confidence": "medium",
+      "domain": "AI Test-Driven Development",
       "suggested-code": "    RequiredTestIsolation = Disabled;"
     },
     {
       "id": "agent:unquoted-dateformula-placeholder",
-      "severity": "major",
+      "severity": "minor",
       "message": "A dataset value uses $DateFormula-<CW+1M>$ without quotes. The < > characters conflict with YAML flow syntax and the placeholder will fail to parse. Recommendation: wrap the value in double quotes.",
       "location": { "file": "test/.resources/datasets/MY-DATASET.yaml", "line": 14 },
       "references": [],
-      "confidence": "high",
+      "confidence": "medium",
+      "domain": "AI Test-Driven Development",
       "suggested-code": "          Shipment Date: \"$DateFormula-<CW+1M>$\""
     }
   ],

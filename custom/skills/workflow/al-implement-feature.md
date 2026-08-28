@@ -1,9 +1,9 @@
 ---
 kind: action-skill
-id: implement-feature
+id: portable-implement-feature
 version: 2
 title: Feature Implementation Conformance Review
-description: Reviews a Business Central implementation against its feature specification and technical plan before testing, and emits a findings report.
+description: Portable implementation-conformance review of supplied Business Central specification and plan artifacts; it does not define scaffold governance.
 inputs: [repository, deployment-context]
 outputs: [findings-report]
 bc-version: [all]
@@ -51,7 +51,7 @@ Output conforms to the DO output contract. Example agent finding:
 
 ```json
 {
-  "skill": { "id": "implement-feature", "version": 2 },
+  "skill": { "id": "portable-implement-feature", "version": 2 },
   "outcome": "completed",
   "summary": {
     "counts": { "blocker": 0, "major": 0, "minor": 1, "info": 0 },

@@ -35,7 +35,7 @@ Discard files that are not applicable. Retain conditionally applicable files (an
 
 ## Worklist
 
-Compute the schema diff against the supplied released baseline. A change enters the migration worklist only when `deployment-context` establishes that the affected element shipped or may contain persisted data. If the element is new in the current unreleased cycle, apply `microsoft/knowledge/upgrade/unreleased-schema-change-needs-no-upgrade-path.md` and do not require migration. If release status is unknown, omit the deployment-dependent candidate. For eligible changes, review:
+Compute the schema diff against the supplied released baseline. A change enters the migration worklist only when `deployment-context` establishes that the affected element shipped or may contain persisted data. If the element is new in the current unreleased cycle, apply `microsoft/knowledge/upgrade/unreleased-schema-change-needs-no-upgrade-path.md` and do not require migration. If the diff contains compatibility-relevant schema changes but the released baseline or release status is missing, retain the candidate as unevaluated and return `partial`; never report a clean compatibility result. For eligible changes, review:
 
 - New required or non-nullable fields with no default, and new fields with an `InitValue` that downstream code assumes is populated on existing rows.
 - Field renames (AL `Rename` moves only metadata, not data, and does not rewrite JSON keys that store the old field name).
@@ -58,7 +58,7 @@ When a concrete migration gap has no curated rule (a per-company step that write
 
 Set `domain` to `Upgrade` on every finding. Set `suggested-code` when the fix is mechanical (wrapping a step in `UpgradeTagMgt.HasUpgradeTag`/`SetUpgradeTag`); otherwise set `suggested-code-omission-reason` (for example `requires authoring a new upgrade step body`). Do not emit findings for satisfied rules; compliant worklist items contribute only to coverage.
 
-Outcome selection: `completed` when every schema change was evaluated (including an empty `findings`); `no-knowledge` when no curated knowledge survived and no agent finding was raised; `not-applicable` when the diff has no schema change to review; `partial` or `failed` per the DO contract with `outcome-reason`.
+Outcome selection: `completed` when every schema change was evaluated against sufficient deployment context; `not-applicable` when the diff has no schema change; `partial` when compatibility applies but a released baseline, release status, or persisted-data context needed for a decision is missing; `failed` when supplied baseline evidence cannot be read. An empty finding set cannot turn missing baseline evidence into a clean result.
 
 ## Output
 

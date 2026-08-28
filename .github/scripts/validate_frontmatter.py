@@ -14,6 +14,7 @@ Exit status: 0 on success (no errors), 1 on any error. Warnings do not fail.
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import re
 import sys
@@ -62,6 +63,7 @@ KEBAB_CASE = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
 ISO_ALPHA2 = re.compile(r"^[a-z]{2}$")
 RANGE_SHORTHAND = re.compile(r"^(\d+)\.\.(\d+)?$")
 FENCED_CODE_BLOCK = re.compile(r"^```", re.MULTILINE)
+JSON_CODE_BLOCK = re.compile(r"^```json\s*\n(.*?)^```\s*$", re.MULTILINE | re.DOTALL)
 HEADING_H2 = re.compile(r"^##\s+(.+?)\s*$", re.MULTILINE)
 SAMPLE_REFERENCE = re.compile(r"`([a-z0-9]+(?:-[a-z0-9]+)*\.(?:good|bad)\.[a-z0-9]+(?:\.txt)?)`")
 
@@ -378,6 +380,10 @@ def validate_action_skill(path: Path, parsed: Parsed, report: Report) -> None:
         if not is_non_empty_list_of_str(ss):
             report.error(path, "R20", "sub-skills must be a non-empty list of repo-relative paths", 1)
         else:
+            normalized_entries = [entry.lstrip("./") for entry in ss]
+            duplicates = sorted({entry for entry in normalized_entries if normalized_entries.count(entry) > 1})
+            if duplicates:
+                report.error(path, "R20", f"sub-skills contains duplicate entries: {duplicates}", 1)
             bad = [x for x in ss if not x.endswith(".md")]
             if bad:
                 report.error(path, "R20", f"sub-skills entries must end in '.md': {bad}", 1)
@@ -397,6 +403,265 @@ def validate_action_skill(path: Path, parsed: Parsed, report: Report) -> None:
     if len(indices) == len(ACTION_SKILL_SECTIONS) and indices != sorted(indices):
         order = [heads[i] for i in indices]
         report.error(path, "R21", f"required sections out of order: {order}; expected {ACTION_SKILL_SECTIONS}")
+
+    validate_report_examples(path, parsed, report)
+
+
+def is_review_skill(path: Path, frontmatter: dict[str, Any]) -> bool:
+    review_text = f"{frontmatter.get('title', '')} {frontmatter.get('description', '')}"
+    return path.parent.name == "review" or bool(re.search(r"\b(review|reviews|audit|audits|validat\w*)\b", review_text, re.IGNORECASE))
+
+
+def validate_finding(path: Path, finding: Any, report: Report, line: int, review_skill: bool) -> None:
+    if not isinstance(finding, dict):
+        report.error(path, "R29", "findings entries must be JSON objects", line)
+        return
+    required = {"id", "severity", "message", "references", "confidence"}
+    missing = required - finding.keys()
+    if missing:
+        report.error(path, "R29", f"finding missing required fields: {sorted(missing)}", line)
+    if not isinstance(finding.get("id"), str) or not finding["id"].strip():
+        report.error(path, "R29", "finding id must be a non-empty string", line)
+    if finding.get("severity") not in {"blocker", "major", "minor", "info"}:
+        report.error(path, "R29", f"invalid finding severity: {finding.get('severity')!r}", line)
+    if not isinstance(finding.get("message"), str) or not finding["message"].strip():
+        report.error(path, "R29", "finding message must be a non-empty string", line)
+    if finding.get("confidence") not in {"high", "medium", "low"}:
+        report.error(path, "R29", f"invalid finding confidence: {finding.get('confidence')!r}", line)
+    finding_id = finding.get("id")
+    references = finding.get("references")
+    if not isinstance(references, list):
+        report.error(path, "R29", "finding references must be an array", line)
+        return
+    if references:
+        primary = references[0]
+        if not isinstance(primary, dict) or finding_id != primary.get("path"):
+            report.error(path, "R30", "citation finding id must equal references[0].path", line)
+        if any(field in finding for field in ("occurrence-key", "evidence", "gating")):
+            report.error(path, "R29", "knowledge-backed findings must not carry occurrence-key, evidence, or gating", line)
+    elif isinstance(finding_id, str) and finding_id.startswith("agent:"):
+        if not re.fullmatch(r"agent:[a-z0-9]+(?:-[a-z0-9]+)*", finding_id):
+            report.error(path, "R31", "agent finding id must be agent: followed by a stable kebab-case slug", line)
+        if finding.get("severity") in {"major", "blocker"}:
+            report.error(path, "R31", "uncited agent finding severity is capped at minor", line)
+        if finding.get("confidence") == "high":
+            report.error(path, "R31", "uncited agent finding confidence is capped at medium", line)
+        if any(field in finding for field in ("occurrence-key", "evidence", "gating")):
+            report.error(path, "R31", "agent findings must not carry occurrence-key, evidence, or gating", line)
+    elif isinstance(finding_id, str) and finding_id.startswith("evidence:"):
+        if not re.fullmatch(r"evidence:[a-z0-9]+(?:-[a-z0-9]+)*", finding_id):
+            report.error(path, "R32", "evidence finding id must be evidence: followed by a stable kebab-case slug", line)
+        evidence = finding.get("evidence")
+        allowed_kinds = {"compiler", "analyzer", "platform-validator", "test-runner", "coverage-tool", "browser-assertion", "tool-envelope"}
+        allowed_statuses = {"failed", "error", "timeout", "threshold-failed", "assertion-failed"}
+        if not isinstance(evidence, dict):
+            report.error(path, "R32", "evidence finding requires an evidence object", line)
+        else:
+            if set(evidence) != {"kind", "source", "status"}:
+                report.error(path, "R32", "evidence object must contain exactly kind, source, and status", line)
+            if evidence.get("kind") not in allowed_kinds:
+                report.error(path, "R32", f"invalid evidence kind: {evidence.get('kind')!r}", line)
+            if not isinstance(evidence.get("source"), str) or not evidence["source"].strip():
+                report.error(path, "R32", "evidence source must be a non-empty string", line)
+            if evidence.get("status") not in allowed_statuses:
+                report.error(path, "R32", f"invalid or passing evidence status: {evidence.get('status')!r}", line)
+        if not isinstance(finding.get("gating"), bool):
+            report.error(path, "R32", "evidence finding requires boolean gating", line)
+        occurrence_key = finding.get("occurrence-key")
+        if not isinstance(occurrence_key, str) or not re.fullmatch(r"[a-z0-9][a-z0-9._:/-]*", occurrence_key):
+            report.error(path, "R32", "evidence finding requires a stable lower-case occurrence-key", line)
+    else:
+        report.error(path, "R29", "uncited finding id must start with agent: or evidence:", line)
+    if review_skill:
+        domain = finding.get("domain")
+        if not isinstance(domain, str) or not domain.strip():
+            report.error(path, "R33", "every review-skill finding requires a non-empty domain", line)
+        elif domain != domain.strip() or any(char in domain for char in "\r\n\t"):
+            report.error(path, "R33", "review finding domain must be trimmed, single-line display text", line)
+
+
+def finding_counts(findings: list[Any]) -> dict[str, int]:
+    result = {severity: 0 for severity in ("blocker", "major", "minor", "info")}
+    for finding in findings:
+        if isinstance(finding, dict) and finding.get("severity") in result:
+            result[finding["severity"]] += 1
+    return result
+
+
+def rolled_outcome(sub_results: list[dict[str, Any]]) -> str | None:
+    outcomes = [result.get("outcome") for result in sub_results]
+    if not outcomes:
+        return None
+    if all(outcome == "failed" for outcome in outcomes):
+        return "failed"
+    if "partial" in outcomes or ("failed" in outcomes and any(outcome != "failed" for outcome in outcomes)):
+        return "partial"
+    if all(outcome == "not-applicable" for outcome in outcomes):
+        return "not-applicable"
+    if all(outcome in {"no-knowledge", "not-applicable"} for outcome in outcomes) and "no-knowledge" in outcomes:
+        return "no-knowledge"
+    return "completed"
+
+
+def validate_report_object(path: Path, value: Any, report: Report, line: int, review_skill: bool) -> None:
+    if not isinstance(value, dict):
+        return
+    if not ({"skill", "outcome", "summary", "findings"} & value.keys()):
+        return
+    required = {"skill", "outcome", "summary", "findings", "suppressed"}
+    missing = required - value.keys()
+    if missing:
+        report.error(path, "R36", f"report missing required fields: {sorted(missing)}", line)
+    skill = value.get("skill")
+    if (
+        not isinstance(skill, dict)
+        or set(skill) != {"id", "version"}
+        or not isinstance(skill.get("id"), str)
+        or not skill.get("id")
+        or not isinstance(skill.get("version"), int)
+        or isinstance(skill.get("version"), bool)
+        or skill.get("version", 0) <= 0
+    ):
+        report.error(path, "R36", "report skill must contain exactly non-empty string id and positive integer version", line)
+    outcome = value.get("outcome")
+    allowed_outcomes = {"completed", "not-applicable", "no-knowledge", "partial", "failed"}
+    if outcome not in allowed_outcomes:
+        report.error(path, "R36", f"invalid report outcome: {outcome!r}", line)
+    if outcome in {"partial", "failed"} and (not isinstance(value.get("outcome-reason"), str) or not value["outcome-reason"].strip()):
+        report.error(path, "R36", f"outcome-reason is required for {outcome}", line)
+    findings = value.get("findings")
+    if not isinstance(findings, list):
+        report.error(path, "R29", "report findings must be an array", line)
+        return
+    for finding in findings:
+        validate_finding(path, finding, report, line, review_skill)
+    evidence_identities = [
+        (finding.get("id"), finding.get("occurrence-key"))
+        for finding in findings
+        if isinstance(finding, dict) and str(finding.get("id", "")).startswith("evidence:")
+    ]
+    if len(evidence_identities) != len(set(evidence_identities)):
+        report.error(path, "R32", "deterministic evidence identities (id, occurrence-key) must be unique within a report", line)
+    non_evidence_ids = [
+        finding.get("id")
+        for finding in findings
+        if isinstance(finding, dict) and not str(finding.get("id", "")).startswith("evidence:")
+    ]
+    if len(non_evidence_ids) != len(set(non_evidence_ids)):
+        report.error(path, "R39", "knowledge-backed and agent findings must be deduplicated by id within a report", line)
+    if outcome in {"not-applicable", "no-knowledge"} and findings:
+        report.error(path, "R36", f"{outcome} reports must have empty findings", line)
+    if outcome == "failed" and any(not isinstance(finding, dict) or not str(finding.get("id", "")).startswith("evidence:") for finding in findings):
+        report.error(path, "R36", "failed reports may contain only deterministic evidence findings", line)
+    summary = value.get("summary")
+    if not isinstance(summary, dict):
+        report.error(path, "R37", "report summary must be an object", line)
+    else:
+        counts = summary.get("counts")
+        expected_counts = finding_counts(findings)
+        if not isinstance(counts, dict) or set(counts) != set(expected_counts) or any(not isinstance(count, int) or isinstance(count, bool) or count < 0 for count in counts.values()):
+            report.error(path, "R37", "summary.counts must contain exactly non-negative integer blocker, major, minor, and info counts", line)
+        elif counts != expected_counts:
+            report.error(path, "R37", f"summary.counts {counts} do not equal findings counts {expected_counts}", line)
+        coverage = summary.get("coverage")
+        if not isinstance(coverage, dict) or set(coverage) != {"worklist-size", "items-evaluated"}:
+            report.error(path, "R37", "summary.coverage must contain exactly worklist-size and items-evaluated", line)
+        elif any(not isinstance(count, int) or isinstance(count, bool) or count < 0 for count in coverage.values()) or coverage["items-evaluated"] > coverage["worklist-size"]:
+            report.error(path, "R37", "summary.coverage values must be non-negative integers with items-evaluated <= worklist-size", line)
+    if not isinstance(value.get("suppressed"), list):
+        report.error(path, "R36", "report suppressed must be an array", line)
+    sub_results = value.get("sub-results", [])
+    if not isinstance(sub_results, list):
+        report.error(path, "R38", "sub-results must be an array", line)
+    else:
+        for sub_result in sub_results:
+            validate_report_object(path, sub_result, report, line, review_skill)
+        if sub_results:
+            expected_outcome = rolled_outcome([result for result in sub_results if isinstance(result, dict)])
+            if expected_outcome and outcome != expected_outcome:
+                report.error(path, "R38", f"super-skill outcome {outcome!r} does not match rolled outcome {expected_outcome!r}", line)
+            if isinstance(summary, dict) and isinstance(summary.get("coverage"), dict):
+                expected_coverage = {
+                    key: sum(
+                        result.get("summary", {}).get("coverage", {}).get(key, 0)
+                        for result in sub_results if isinstance(result, dict)
+                    )
+                    for key in ("worklist-size", "items-evaluated")
+                }
+                if summary["coverage"] != expected_coverage:
+                    report.error(path, "R38", f"super-skill coverage {summary['coverage']} does not equal sub-result rollup {expected_coverage}", line)
+            top_findings = [finding for finding in findings if isinstance(finding, dict)]
+            producers = {
+                result.get("skill", {}).get("id")
+                for result in sub_results
+                if isinstance(result, dict) and isinstance(result.get("skill"), dict)
+            }
+            for top_finding in top_findings:
+                if top_finding.get("from-sub-skill") not in producers | {"agent"}:
+                    report.error(path, "R38", "every super-skill finding must identify a sub-skill producer or agent", line)
+            for sub_result in sub_results:
+                if not isinstance(sub_result, dict) or not isinstance(sub_result.get("skill"), dict):
+                    continue
+                producer = sub_result["skill"].get("id")
+                for sub_finding in sub_result.get("findings", []):
+                    if not isinstance(sub_finding, dict):
+                        continue
+                    is_evidence = str(sub_finding.get("id", "")).startswith("evidence:")
+                    if sub_result.get("outcome") == "failed" and not is_evidence:
+                        continue
+                    candidates = [finding for finding in top_findings if finding.get("from-sub-skill") == producer]
+                    if is_evidence:
+                        candidates = [
+                            finding for finding in candidates
+                            if finding.get("id") == sub_finding.get("id")
+                            and finding.get("occurrence-key") == sub_finding.get("occurrence-key")
+                        ]
+                        if not candidates:
+                            report.error(path, "R38", f"rolled evidence from {producer} must preserve id and occurrence-key", line)
+                            continue
+                        expected = dict(sub_finding)
+                        actual = dict(candidates[0])
+                        actual.pop("from-sub-skill", None)
+                        if actual != expected:
+                            report.error(path, "R38", f"rolled evidence from {producer} must be preserved verbatim except from-sub-skill", line)
+                    else:
+                        references = sub_finding.get("references", [])
+                        expected_id = sub_finding.get("id") if references else f"{producer}:{sub_finding.get('id')}"
+                        candidates = [finding for finding in candidates if finding.get("id") == expected_id]
+                        if not candidates:
+                            report.error(path, "R38", f"sub-result finding from {producer} is missing from top-level rollup", line)
+                            continue
+                        expected = dict(sub_finding)
+                        actual = dict(candidates[0])
+                        actual.pop("from-sub-skill", None)
+                        if not references:
+                            actual["id"] = sub_finding.get("id")
+                        if actual != expected:
+                            report.error(path, "R38", f"rolled finding from {producer} is not preserved by composition rules", line)
+
+
+def validate_report_examples(path: Path, parsed: Parsed, report: Report) -> None:
+    for match in JSON_CODE_BLOCK.finditer(parsed.body):
+        line = parsed.body_start_line + parsed.body[:match.start()].count("\n")
+        try:
+            value = json.loads(match.group(1))
+        except json.JSONDecodeError as exc:
+            report.error(path, "R29", f"invalid JSON example: {exc.msg}", line + exc.lineno)
+            continue
+        frontmatter = parsed.frontmatter or {}
+        if isinstance(value, dict) and ({"skill", "outcome", "summary", "findings"} & value.keys()):
+            skill = value.get("skill")
+            if not isinstance(skill, dict) or skill.get("id") != frontmatter.get("id") or skill.get("version") != frontmatter.get("version"):
+                report.error(path, "R35", "top-level report skill id/version must match action-skill frontmatter", line)
+        validate_report_object(path, value, report, line, is_review_skill(path, frontmatter))
+
+    action_match = re.search(r"^## Action\s*$\n(.*?)(?=^## Output\s*$)", parsed.body, re.MULTILINE | re.DOTALL)
+    if action_match and re.search(
+        r"(?:no violation|satisfied|compliant|passes?).{0,80}emit(?:s|ted)?\s+(?:an?\s+)?`?info|emit(?:s|ted)?\s+(?:an?\s+)?`?info.{0,80}(?:no violation|satisfied|compliant|passes?)",
+        action_match.group(1), re.IGNORECASE | re.DOTALL,
+    ):
+        line = parsed.body_start_line + parsed.body[:action_match.start()].count("\n")
+        report.error(path, "R34", "satisfied rules and passing checks belong in summary, not info findings", line)
 
 
 def validate_meta_skill(path: Path, parsed: Parsed, report: Report) -> None:
@@ -538,41 +803,32 @@ class SkillRecord:
 
 
 def validate_sub_skills_registry(path: Path, fm: dict[str, Any], root: Path, report: Report) -> None:
-    """R26: a super-skill's declared `sub-skills` must exactly match the
-    `al-*-review.md` leaf files present in the same directory (set equality,
-    ordering-agnostic). This keeps the registered leaf list the single source
-    of truth and fails CI on a forgotten, stale, or missing registration.
-
-    Only applies to action-skill files declaring a non-empty list-of-str
-    `sub-skills`. Files whose `sub-skills` is malformed are handled by R20.
-    """
+    """R26: declared sub-skills must be existing action-skill leaves."""
     ss = fm.get("sub-skills")
     if not is_non_empty_list_of_str(ss):
         return
 
     declared = {s.lstrip("./") for s in ss}
-
-    # Sibling leaves on disk, excluding the super-skill file itself.
-    leaves = {
-        p.relative_to(root).as_posix()
-        for p in path.parent.glob("al-*-review.md")
-        if p.resolve() != path.resolve()
-    }
-
-    # Declared entries that are not real sibling leaves on disk (missing/stale).
-    for entry in sorted(declared - leaves):
+    for entry in sorted(declared):
         entry_path = root / entry
         if not entry_path.exists():
             report.error(path, "R26", f"declared sub-skill does not exist on disk: {entry}", 1)
-        else:
+            continue
+        try:
+            target = parse_markdown(entry_path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError) as exc:
+            report.error(path, "R26", f"cannot read declared sub-skill {entry}: {exc}", 1)
+            continue
+        target_fm = target.frontmatter or {}
+        if target_fm.get("kind") != "action-skill":
             report.error(
                 path, "R26",
-                f"sub-skills entry is not a sibling 'al-*-review.md' leaf: {entry}", 1,
+                f"sub-skills entry is not an action skill: {entry}", 1,
             )
-
-    # Sibling leaves on disk that were never registered ('forgot to wire it up').
-    for leaf in sorted(leaves - declared):
-        report.error(path, "R26", f"leaf not registered in sub-skills: {leaf}", 1)
+        elif target_fm.get("sub-skills"):
+            report.error(path, "R26", f"nested super-skill is not permitted: {entry}", 1)
+        if entry_path.resolve() == path.resolve():
+            report.error(path, "R26", "super-skill cannot include itself", 1)
 
 
 def run(root: Path) -> Report:
@@ -627,18 +883,21 @@ def run(root: Path) -> Report:
             if domain_dir.is_dir():
                 validate_samples_in_domain(domain_dir, root, report)
 
-    # Third pass: R24 unique ids within kind
-    by_kind: dict[str, dict[str, list[Path]]] = {}
+    # Third pass: R24 unique ids within kind and layer. Cross-layer duplicates
+    # are intentional overrides resolved by Entry precedence.
+    by_kind: dict[tuple[str, str], dict[str, list[Path]]] = {}
     for rec in skill_records:
         if rec.skill_id is None:
             continue
-        by_kind.setdefault(rec.kind, {}).setdefault(rec.skill_id, []).append(rec.path)
-    for kind, by_id in by_kind.items():
+        rel = rec.path.relative_to(root)
+        layer = rel.parts[0] if rel.parts[0] in LAYERS else "root"
+        by_kind.setdefault((rec.kind, layer), {}).setdefault(rec.skill_id, []).append(rec.path)
+    for (kind, layer), by_id in by_kind.items():
         for sid, paths in by_id.items():
             if len(paths) > 1:
                 for p in paths:
                     others = [q.relative_to(root).as_posix() for q in paths if q != p]
-                    report.error(p, "R24", f"skill id '{sid}' ({kind}) is not unique; also defined in: {others}")
+                    report.error(p, "R24", f"skill id '{sid}' ({kind}) is not unique within layer '{layer}'; also defined in: {others}")
 
     # Fourth pass: R26 sub-skills registry matches leaf files on disk
     for path, fm in action_skill_fms:

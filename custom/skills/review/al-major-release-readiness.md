@@ -7,7 +7,7 @@ description: Reviews a PR that bumps app.json application or platform versions a
 inputs: [pr-diff, repository, deployment-context]
 outputs: [findings-report]
 bc-version: [all]
-technologies: [al]
+technologies: [al, json]
 countries: [w1]
 application-area: [all]
 ---
@@ -27,7 +27,7 @@ Read the BCQuality knowledge index once (the `knowledge-index.json` Entry's prep
 Apply the frontmatter matching rules defined in READ against the task context:
 
 - `bc-version`: the target BC version from the PR branch `app.json`, or `unknown` if unavailable.
-- `technologies`: `[al]`.
+- `technologies`: the intersection of `[al, json]` present in source and app manifests.
 - `countries`: the consuming app's declared countries, or `unknown`.
 - `application-area`: the application areas of the changed objects, or `unknown`.
 

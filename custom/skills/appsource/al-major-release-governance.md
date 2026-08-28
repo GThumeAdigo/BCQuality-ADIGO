@@ -7,7 +7,7 @@ description: Reviews Business Central major-version upgrade governance - NextMaj
 inputs: [pr-diff, repository]
 outputs: [findings-report]
 bc-version: [all]
-technologies: [al]
+technologies: [al, json]
 countries: [w1]
 application-area: [all]
 ---
@@ -27,7 +27,7 @@ The rule set is the team's major-upgrade governance, plus the `upgrade` knowledg
 Apply the frontmatter matching rules defined in READ against the task context:
 
 - `bc-version` - the current Production major from `app.json` and the approaching major, or `unknown`.
-- `technologies` - `[al]`.
+- `technologies` - the intersection of `[al, json]` present in source and app manifests.
 - `countries` - from the app's `app.json`, else `unknown`.
 - `application-area` - the areas declared by the changed objects; pass the actual set.
 
@@ -48,12 +48,11 @@ A rule enters the worklist when the diff bumps `app.json` versions, cuts or modi
 
 For each worklist item, evaluate the change or repository state and emit findings:
 
-- A premature `release/extension/NextMajor` cut (customers not yet on the latest major, no mandating feature documented) or an `app.json` `application`/`platform` bump made only for compatibility testing is a `blocker`: it commits the team to parallel maintenance prematurely.
-- An unresolved warning/info on the current version that does *not* require a NextMajor dependency, or an early branch with no documented driving feature and no backport task, is `major`.
+- Governance defects inferred from branch and manifest review are agent findings capped at `minor` and `medium` unless a curated upgrade rule applies. Direct compatibility/build validator failures are separate deterministic evidence with a stable app/check occurrence key and may gate.
 - A missing `Sandbox-NextMajor` mirror cadence, or pushing a customer to upgrade only to let the team drop the old major, is `minor`.
-- When a rule is clearly applicable but no violation is detected, emit `info`.
+- Record satisfied checks in summary coverage; do not emit findings for them.
 
-Cite an `upgrade`-domain knowledge file in `references` when the finding is a deprecated-API or obsolete-tag issue; otherwise emit an agent finding within this skill's domain (`references: []`, `id` prefixed `agent:`, severity capped per `skills/do.md`). Set `confidence` `high` for unambiguous `app.json`/branch evidence, `medium` for heuristic or `unknown`-dimension cases. Provide `suggested-code` only for mechanical manifest fixes; otherwise set `suggested-code-omission-reason`.
+Cite an `upgrade` knowledge file when one maps; otherwise emit a capped agent finding. `high` confidence is available only to unambiguous knowledge-backed findings or deterministic tool observations; agent findings remain at `medium` or lower. Provide `suggested-code` only for mechanical manifest fixes.
 
 Outcome selection: `completed` when every worklist item was evaluated; `no-knowledge` when no applicable rule survived filtering; `not-applicable` when the change does not touch upgrade governance; `partial` on a budget cutoff; `failed` on an unrecoverable error (`outcome-reason` required).
 
@@ -66,17 +65,18 @@ Output conforms to the DO output contract. A populated example:
   "skill": { "id": "al-major-release-governance", "version": 1 },
   "outcome": "completed",
   "summary": {
-    "counts": { "blocker": 1, "major": 0, "minor": 0, "info": 0 },
+    "counts": { "blocker": 0, "major": 0, "minor": 1, "info": 0 },
     "coverage": { "worklist-size": 4, "items-evaluated": 4 }
   },
   "findings": [
     {
       "id": "agent:premature-nextmajor-branch",
-      "severity": "blocker",
+      "severity": "minor",
       "message": "This PR cuts release/extension/NextMajor while two customer environments are still on the prior major and no mandating feature is documented. Per the governance rule, defer the branch until all customers are upgraded or document the specific feature that requires the new platform. Recommendation: revert the branch cut and track compatibility testing without bumping app.json.",
       "location": { "file": "app.json", "line": 11 },
       "references": [],
-      "confidence": "high"
+      "confidence": "medium",
+      "domain": "Major Release Governance"
     }
   ],
   "suppressed": []

@@ -7,7 +7,7 @@ description: Reviews an AL-Go for GitHub CI/CD setup against the team's framewor
 inputs: [repository, file-path]
 outputs: [findings-report]
 bc-version: [all]
-technologies: [al, powershell]
+technologies: [al, powershell, yaml, json, github-actions]
 countries: [w1]
 application-area: [all]
 ---
@@ -27,7 +27,7 @@ The rule set is the team's AL-Go for GitHub framework governance: the hard rules
 Apply the frontmatter matching rules defined in READ against the task context:
 
 - `bc-version` - the target BC version from the extension's `app.json`, or `unknown` if unavailable.
-- `technologies` - `[al, powershell]` (AL-Go orchestrates PowerShell-based workflows over an AL extension).
+- `technologies` - the intersection of `[al, powershell, yaml, json, github-actions]` present in the extension, settings, and workflows.
 - `countries` - the countries declared in the app's `app.json`; default to the orchestrator's configured context, else `unknown`.
 - `application-area` - the union of application areas declared by the extension; pass the actual set, do not substitute `[all]`.
 
@@ -51,12 +51,11 @@ A rule enters the worklist when the repo's settings, workflows, branch layout, o
 
 For each worklist item, evaluate the repo or change and emit findings. These are agent findings within this skill's pipeline-governance domain (`references: []`, `id` prefixed `agent:`, severity capped per `skills/do.md`), since no curated knowledge file covers AL-Go configuration:
 
-- A hard-rule violation that breaks the framework is a `blocker`: a hand-edit to any file under `.github/workflows/AL-Go-*` (breaks the auto-upgrade path), a signed `.app` committed into the AL-Go repo instead of `d365-dependent-artifacts`, a rollback of `main` to an older version, or a `release/extension/NextMajor` branch cut before all customer environments are on the new major (defer to `al-major-release-governance` for the upgrade governance).
-- A governance gap that degrades the pipeline is `major`: a settings change that affects workflow shape with no follow-up Update AL-Go System Files, a release missing its semantic tag / Pre-release marking / Create Release Branch step, the AL MCP Server taking over the canonical build/test/publish path that AL-Go owns, or `d365-dependent-artifacts` made public or accepting direct commits to `main`.
+- Framework and governance defects inferred from repository configuration are capped agent findings. A named AL-Go/GitHub validator or workflow run that directly reports failure is separate deterministic evidence with a stable workflow/job/check occurrence key and may gate according to that result.
 - A hygiene gap is `minor`: a multi-project repo combining apps that are not tightly coupled, a CI symbol pull without `globalSourcesOnly: true`, or a hotfix committed directly to a release branch rather than via a `hotfix/<description>` branch.
-- When a rule is clearly applicable but no violation is detected, emit `info`.
+- Record satisfied pipeline checks in summary coverage; do not emit findings for them.
 
-Set `confidence` to `high` for unambiguous file/settings matches (an edit inside `AL-Go-*`, a committed `.app`), `medium` for heuristic detections or when any frontmatter dimension was `unknown`, and `low` for applicability-only advisories. For mechanical settings fixes, emit `findings[].suggested-code` with the literal replacement; otherwise set `suggested-code-omission-reason` (most framework violations - a workflow hand-edit, a misplaced signed app - are not mechanical one-line fixes). Hold every agent finding to the precision bar in `skills/do.md`; when in doubt, omit. See `skills/do.md` for the full contract.
+Use `high` confidence only for direct named-validator/tool evidence or knowledge-backed findings. Uncited pipeline review findings remain at `medium` or lower. For mechanical settings fixes, emit `suggested-code`; otherwise set an omission reason.
 
 Outcome selection: `completed` when every worklist item was evaluated (including an empty `findings` array); `no-knowledge` when no applicable rule survived Source, Relevance, and configuration filtering; `not-applicable` when the task context has no AL-Go repo to review; `partial` when a budget was hit before the worklist was exhausted; `failed` on an unrecoverable error (`outcome-reason` required).
 
@@ -69,25 +68,27 @@ Output conforms to the DO output contract. A populated example:
   "skill": { "id": "al-go-pipelines", "version": 1 },
   "outcome": "completed",
   "summary": {
-    "counts": { "blocker": 1, "major": 1, "minor": 0, "info": 0 },
+    "counts": { "blocker": 0, "major": 0, "minor": 2, "info": 0 },
     "coverage": { "worklist-size": 7, "items-evaluated": 7 }
   },
   "findings": [
     {
       "id": "agent:al-go-workflow-script-hand-edited",
-      "severity": "blocker",
+      "severity": "minor",
       "message": "A file under .github/workflows/AL-Go-CICD.yaml has been hand-edited. AL-Go downloads these workflows at runtime from upstream; editing them in the repo breaks the auto-upgrade path. Recommendation: revert the edit and customise via .AL-Go/settings.json or .github/AL-Go-Settings.json, then run Update AL-Go System Files.",
       "location": { "file": ".github/workflows/AL-Go-CICD.yaml", "line": 1 },
       "references": [],
-      "confidence": "high"
+      "confidence": "medium",
+      "domain": "AL-Go Pipelines"
     },
     {
       "id": "agent:settings-changed-without-update-system-files",
-      "severity": "major",
+      "severity": "minor",
       "message": "The PR changes the environments array in .github/AL-Go-Settings.json but does not run Update AL-Go System Files, so the workflow scripts that consume the new setting are not regenerated. Recommendation: run the Update AL-Go System Files workflow and merge its PR.",
       "location": { "file": ".github/AL-Go-Settings.json", "line": 3 },
       "references": [],
-      "confidence": "medium"
+      "confidence": "medium",
+      "domain": "AL-Go Pipelines"
     }
   ],
   "suppressed": []

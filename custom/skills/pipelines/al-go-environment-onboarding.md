@@ -7,7 +7,7 @@ description: Reviews how a Business Central environment is wired into an AL-Go r
 inputs: [repository, file-path]
 outputs: [findings-report]
 bc-version: [all]
-technologies: [al, powershell]
+technologies: [al, powershell, yaml, json, github-actions]
 countries: [w1]
 application-area: [all]
 ---
@@ -27,7 +27,7 @@ The rule set is the AL-Go environment-onboarding procedure: Entra App Registrati
 Apply the frontmatter matching rules defined in READ against the task context:
 
 - `bc-version` - the target BC version from the extension's `app.json`, or `unknown` if unavailable.
-- `technologies` - `[al, powershell]` (AL-Go orchestration runs PowerShell over an AL extension).
+- `technologies` - the intersection of `[al, powershell, yaml, json, github-actions]` present in AL-Go environment settings and workflows.
 - `countries` - the countries declared in the app's `app.json`; default to the orchestrator's configured context, else `unknown`.
 - `application-area` - the union of application areas declared by the extension; pass the actual set, do not substitute `[all]`.
 
@@ -49,12 +49,11 @@ A rule enters the worklist when the repo's settings, secrets, or environment con
 
 For each worklist item, evaluate the environment wiring and emit findings. These are agent findings within this skill's deployment-onboarding domain (`references: []`, `id` prefixed `agent:`, severity capped per `skills/do.md`), since no curated knowledge file covers AL-Go environment setup:
 
-- A wiring fault that makes deployment fail or deploy incorrectly is a `blocker`: the BC application user left enabled in Production (an outage risk), a GitHub environment name that does not match the BC environment name, an `AUTHCONTEXT` secret missing one of its four fields or containing whitespace, or reliance on AL-Go inherited defaults for versioning (which has deployed older or partial versions).
-- A misconfiguration that suppresses or misroutes a deploy is `major`: `Branches` in `DeployTo<Env>` not including the pushed branch (CD does not run), `ContinuousDeployment: false` when continuous deployment was intended (CD runs but nothing deploys), an App Registration that is not admin-consented, or the BC user disabled in the target environment (401 from BC).
+- Wiring and deployment-intent defects inferred from configuration are capped agent findings. A named deployment/platform validator or workflow run that directly reports failure is separate deterministic evidence with a stable environment/check occurrence key and may gate according to that result.
 - A hygiene gap that weakens the setup without breaking it is `minor`: a per-customer App Registration created where the shared one would do, a client secret with no tracked expiry/rotation reminder, or skipping a continuous-deployment test on a throwaway sandbox before wiring a real customer environment.
-- When a rule is clearly applicable but no violation is detected, emit `info`.
+- Record satisfied onboarding checks in summary coverage; do not emit findings for them.
 
-Set `confidence` to `high` for unambiguous settings/secret-shape matches, `medium` for heuristic detections or when any frontmatter dimension was `unknown`, and `low` for applicability-only advisories. For mechanical fixes (flip `ContinuousDeployment` to `true`, add the missing branch to `Branches`, correct a mismatched `EnvironmentName`), emit `findings[].suggested-code` with the literal replacement; otherwise set `suggested-code-omission-reason`. Hold every agent finding to the precision bar in `skills/do.md` - emit only a concrete, material wiring defect; when in doubt, omit. See `skills/do.md` for the full contract.
+Use `high` confidence only for direct named-validator/tool evidence or knowledge-backed findings. Uncited onboarding review findings remain at `medium` or lower. Emit `suggested-code` for mechanical settings fixes; otherwise set an omission reason.
 
 Outcome selection: `completed` when every worklist item was evaluated (including an empty `findings` array); `no-knowledge` when no applicable rule survived Source, Relevance, and configuration filtering; `not-applicable` when the task context has no AL-Go repo to review; `partial` when a budget was hit before the worklist was exhausted; `failed` on an unrecoverable error (`outcome-reason` required).
 
@@ -67,25 +66,27 @@ Output conforms to the DO output contract. A populated example:
   "skill": { "id": "al-go-environment-onboarding", "version": 1 },
   "outcome": "completed",
   "summary": {
-    "counts": { "blocker": 1, "major": 1, "minor": 0, "info": 0 },
+    "counts": { "blocker": 0, "major": 0, "minor": 2, "info": 0 },
     "coverage": { "worklist-size": 5, "items-evaluated": 5 }
   },
   "findings": [
     {
       "id": "agent:bc-application-user-enabled-in-production",
-      "severity": "blocker",
+      "severity": "minor",
       "message": "The AL-Go application user is enabled in the customer Production environment. AL-Go CI/CD only deploys to non-production unless explicitly opted in; leaving the user enabled in Production is an outage risk. Recommendation: disable the Application-type user in Production and keep it enabled only in Sandbox.",
       "location": { "file": ".github/AL-Go-Settings.json", "line": 4 },
       "references": [],
-      "confidence": "medium"
+      "confidence": "medium",
+      "domain": "AL-Go Environment"
     },
     {
       "id": "agent:deployto-branches-excludes-pushed-branch",
-      "severity": "major",
+      "severity": "minor",
       "message": "DeployToTest-NZ defines Branches without 'main', so a push to main never triggers Continuous Deployment. Recommendation: add the deploying branch to Branches and run Update AL-Go System Files.",
       "location": { "file": ".github/AL-Go-Settings.json", "line": 8 },
       "references": [],
-      "confidence": "high",
+      "confidence": "medium",
+      "domain": "AL-Go Environment",
       "suggested-code": "    \"Branches\": [\"main\"],"
     }
   ],

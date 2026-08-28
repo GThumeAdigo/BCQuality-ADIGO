@@ -107,6 +107,13 @@ Every action skill emits a single JSON document that conforms to this schema:
         { "path": "string", "sha": "string" }
       ],
       "confidence": "high | medium | low",
+      "occurrence-key": "string",
+      "evidence": {
+        "kind": "compiler | analyzer | platform-validator | test-runner | coverage-tool | browser-assertion | tool-envelope",
+        "source": "string",
+        "status": "failed | error | timeout | threshold-failed | assertion-failed"
+      },
+      "gating": true,
       "from-sub-skill": "string",
       "domain": "string",
       "suggested-code": "string",
@@ -145,15 +152,15 @@ AL source is the common failure case. Quoted identifiers (for example `Rec."No."
 - `not-applicable` — the skill's frontmatter filters did not match the task context; the skill declined to run.
 - `no-knowledge` — the skill ran but found no applicable knowledge files; `findings` MUST be empty.
 - `partial` — the skill evaluated part of its worklist but did not finish. `summary.coverage` reflects the evaluated subset. Set `outcome-reason` to explain.
-- `failed` — the skill encountered an error and produced no reliable findings. Set `outcome-reason`. Consumers SHOULD ignore `findings` on a failed outcome.
+- `failed` — the skill could not complete. Set `outcome-reason`. `findings` MUST be empty except for deterministic evidence findings that directly record the execution or tool-envelope failure. Consumers MUST ignore agent and knowledge-backed findings on a failed outcome, but MUST retain deterministic evidence findings and honor their `gating` value.
 
 `outcome-reason` is optional for `completed`, `not-applicable`, and `no-knowledge`; required for `partial` and `failed`.
 
 An empty `findings` array with `outcome: completed` means the skill ran and found nothing to flag. Orchestrators MUST NOT conflate this with `not-applicable` or `no-knowledge`.
 
-**`findings[].id`** — a stable identifier for the rule or concern that produced the finding. For citation-based findings (any finding with a non-empty `references`), `id` MUST equal `references[0].path` — the primary knowledge file's repo-relative path. For skills that detect concerns without a direct citation, `id` is a skill-defined slug (kebab-case, stable across versions of the skill). The same `id` produced in two runs MUST refer to the same concern; consumers MAY deduplicate findings by `id`.
+**`findings[].id`** — a stable identifier for the rule or concern that produced the finding. For citation-based findings (any finding with a non-empty `references`), `id` MUST equal `references[0].path` — the primary knowledge file's repo-relative path. For skills that detect concerns without a direct citation, `id` is a skill-defined slug (kebab-case, stable across versions of the skill). The same `id` produced in two runs MUST refer to the same concern. Consumers MUST deduplicate knowledge-backed and agent findings by `id`; deterministic evidence MUST be deduplicated by (`id`, `occurrence-key`) instead.
 
-When a super-skill rolls up a non-citation finding from a sub-skill (an `id` that is a slug, not a path), the super-skill MUST prefix the `id` with `<from-sub-skill>:` to avoid collisions across sub-skills (for example, a slug `missing-test` from `al-security-review` becomes `al-security-review:missing-test`). Citation-based findings are already globally unique through their repo-relative path and MUST NOT be rewritten.
+When a super-skill rolls up an agent finding from a sub-skill, it MUST prefix the `id` with `<from-sub-skill>:` to avoid collisions across sub-skills. Citation-based findings are globally unique through their repo-relative path and MUST NOT be rewritten. Evidence findings are identified by (`id`, `occurrence-key`) and neither field may be rewritten during rollup.
 
 **Agent findings.** A skill MAY emit findings that the agent identified through its own reasoning rather than from a BCQuality knowledge file. BCQuality is an **additive** knowledge layer: it augments the agent's pre-existing review judgement, it does not replace it. An agent finding is encoded by:
 
@@ -180,6 +187,19 @@ Before emitting an agent finding, a skill MUST validate the candidate against th
 
 Consumers that render output MAY treat agent findings differently from knowledge-backed findings (for example, by labelling them and routing them to a separate review domain). The `references: []` marker, together with the `agent:` `id` prefix, is the contract they rely on; `from-sub-skill: "agent"` is the additional marker for super-skill-emitted agent findings.
 
+**Deterministic evidence findings.** A skill MAY emit a finding for a direct, non-passing observation produced by a compiler, analyzer, platform validator, test runner, coverage tool, browser assertion, or tool envelope. This class records tool output; it does not convert model inference into evidence. An evidence finding is encoded by:
+
+- `id` — a stable skill-defined slug prefixed with `evidence:`. The identifier names the observed failure class, not a transient message, test count, line number, or run id; examples are `evidence:test-failed`, `evidence:appsourcecop-failed`, and `evidence:coverage-threshold-failed`.
+- `occurrence-key` — required stable identity for this occurrence within the evidence class. Derive it from durable subject identity, never a timestamp, run id, count, message text, line number alone, or artifact path alone. Test failures use a canonical lower-case `<test-codeunit-id-or-name>/<test-procedure>` key. Required-suite startup failures use `required-suite/<stable-suite-name-or-scope>`. Browser assertions use a canonical lower-case `<guide-section>/<step>/<assertion>` key. Repository-wide gates use a stable scope such as `<app-id>/line-coverage` or `appsourcecop/<rule>/<manifest-property>`. Consumers MUST deduplicate deterministic evidence by the tuple (`id`, `occurrence-key`), not by `id` alone.
+- `references: []` — permitted because the named tool or platform is the authority for the observation. Evidence findings MUST NOT be merged with knowledge-backed findings. If a knowledge file independently explains the defect, emit a separate knowledge-backed finding with its own identity and citation.
+- `evidence` — required object with exactly the observation's `kind`, a non-empty `source` naming the tool/platform and, where useful, its report artifact or version, and a non-passing `status`. Allowed kinds are `compiler`, `analyzer`, `platform-validator`, `test-runner`, `coverage-tool`, `browser-assertion`, and `tool-envelope`. Allowed statuses are `failed`, `error`, `timeout`, `threshold-failed`, and `assertion-failed`.
+- `gating` — required boolean. Set `true` only when the observed result fails a required execution, configured hard threshold, platform validation, or asserted acceptance outcome. A diagnostic observation may be non-gating when the invoking policy explicitly permits it.
+- `confidence` — MAY be `high` when the report or assertion was parsed directly and attributed unambiguously. Lower it when attribution or report parsing is incomplete; do not use evidence findings for inferred defects.
+- `severity` — MAY be `major` or `blocker` when the deterministic impact warrants it. Use `blocker` for a failed required execution or platform gate that prevents the work from proceeding, `major` for a deterministic failure that must be fixed before merge but does not invalidate the execution itself, and lower severities for non-gating observations.
+- `message` — names the command/assertion, observed status, affected test/rule/threshold, and artifact or location needed to reproduce it. It does not speculate about root cause.
+
+Passing tool evidence is never a finding. Put a successful execution status, assertion count, test counts, coverage percentage, and tool identity in `summary` instead. A skill that requires fresh evidence MUST return `partial` or `failed`, as that skill defines, when the evidence is missing or stale; it MUST NOT emit a synthetic evidence finding claiming a tool was not run unless a tool envelope directly reported that required execution failure.
+
 **`findings[].severity`** — see the taxonomy below.
 
 **`findings[].message`** — human-readable explanation of the finding. Single short paragraph. No markdown formatting assumptions.
@@ -199,7 +219,7 @@ Findings without a `location` are permitted (for example, repository-wide observ
 - `path` (required) — repo-relative path to the knowledge file, forward slashes.
 - `sha` (optional) — commit SHA the skill read when producing the finding. Consumers SHOULD include `sha` when the skill was invoked with a specific repo state.
 
-The first reference is the **primary** reference: the knowledge file the finding most directly cites. Additional references provide supporting context and are not ranked. `references` MAY be empty only for **agent findings** (see the `findings[].id` section above for the full encoding); any other finding MUST have at least one reference.
+The first reference is the **primary** reference: the knowledge file the finding most directly cites. Additional references provide supporting context and are not ranked. `references` MAY be empty only for **agent findings** or **deterministic evidence findings** (see the classes above); any other finding MUST have at least one reference.
 
 **Reference-integrity gate (mandatory).** A knowledge-backed finding may cite only a path copied verbatim from the current knowledge index or from a file discovered by the index fallback, and the skill must have opened that exact file in full before citing it. Never construct a plausible slug or infer a path from a topic name. Immediately before emitting the JSON document:
 
@@ -211,6 +231,8 @@ The first reference is the **primary** reference: the knowledge file the finding
 This gate applies independently to every leaf result and again to a super-skill's rolled-up result.
 
 **`findings[].confidence`** — the skill's confidence that the finding is a true positive, given the evidence it evaluated. Not applicability confidence, not severity confidence. Values: `high`, `medium`, `low`.
+
+**`findings[].occurrence-key`**, **`findings[].evidence`**, and **`findings[].gating`** — required together on deterministic evidence findings and omitted from agent and knowledge-backed findings. `gating` is policy impact, not severity: consumers gate only when it is `true`, while severity controls prioritisation and presentation.
 
 **`findings[].from-sub-skill`** — optional. Set only by super-skills. The `skill.id` of the sub-skill that produced the finding, or the literal string `"agent"` for an agent finding the super-skill produced from its own cross-cutting reasoning. Absent on findings emitted directly by a leaf skill — including agent findings the leaf emits within its own domain, which appear in the leaf's own report without this field.
 
@@ -255,7 +277,7 @@ The five required sections still apply. Their meaning shifts from knowledge file
 - `## Source` — names the sub-skills invoked (mirrors `sub-skills` in frontmatter).
 - `## Relevance` — rules for deciding which sub-skills apply to the current task. A sub-skill is relevant when its declared `inputs` are satisfied by the orchestrator's provided inputs and the orchestrator has not disabled it via configuration. The super-skill MUST NOT filter sub-skills by task content (for example, by inspecting the diff or the file). Task-level applicability is the sub-skill's own responsibility; sub-skills signal non-applicability by returning `outcome: "not-applicable"` or `outcome: "no-knowledge"`.
 - `## Worklist` — the final list of sub-skills to invoke; the rest go to `skipped-sub-skills`.
-- `## Action` — invoke each worklisted sub-skill with the appropriate subset of inputs, collect its findings-report verbatim into `sub-results`, and copy its `findings[]` into the super-skill's top-level `findings[]` with `from-sub-skill` set. All finding fields, including the optional `domain`, are preserved verbatim unless this contract explicitly requires a transformation. Findings from a sub-skill with `outcome: "failed"` MUST NOT be copied into the super-skill's top-level `findings[]` and MUST NOT contribute to the super-skill's `summary.counts` (their report is still preserved in `sub-results` for traceability, consistent with DO's rule that consumers ignore a failed skill's findings).
+- `## Action` — invoke each worklisted sub-skill with the appropriate subset of inputs, collect its findings-report verbatim into `sub-results`, and copy its reliable `findings[]` into the super-skill's top-level `findings[]` with `from-sub-skill` set to the producing leaf's `skill.id`. Apply the existing citation and agent-id composition rules, but preserve every evidence field verbatim. In particular, an evidence finding's `id` and `occurrence-key` MUST NOT be prefixed, rewritten, merged, or regenerated during rollup. From a sub-skill with `outcome: "failed"`, copy only deterministic evidence findings; do not copy agent or knowledge-backed findings. Count copied evidence normally and preserve the full failed report in `sub-results` for traceability.
 - `## Output` — the super-skill's output contract, including `sub-results` and, if any, `skipped-sub-skills`.
 
 ### Outcome rollup
@@ -274,7 +296,7 @@ When the worklist is empty (every sub-skill was skipped), `outcome` is `not-appl
 
 ### Rolled-up summary
 
-`summary.counts` is the sum of sub-skill counts. `summary.coverage.worklist-size` and `items-evaluated` are the sums across invoked sub-skills.
+`summary.counts` is the sum of sub-skill counts. `summary.coverage.worklist-size` and `items-evaluated` are the sums across invoked sub-skills. Skills that execute tools SHOULD add a skill-defined summary object such as `execution` with an explicit `status`, tool/source, and relevant counts. These summary extensions report successful and failed execution facts; findings still use only the shared fields above.
 
 ### Suppression scope
 
@@ -308,7 +330,7 @@ Filter by `technologies: [al]` and `bc-version` matching the target environment.
 Intersect `keywords` with tokens derived from the target file's object name and changed members.
 
 ## Action
-For each worklist entry, emit one finding with severity `info`, a message naming the concern, and a reference object pointing to the knowledge file.
+For each worklist entry that the changed file violates, emit one finding with a reference object pointing to the knowledge file. Satisfied entries contribute to `summary.coverage` and never produce findings.
 
 ## Output
 Conforms to the DO output contract.

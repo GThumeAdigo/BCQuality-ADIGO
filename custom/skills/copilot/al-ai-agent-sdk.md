@@ -48,8 +48,7 @@ Narrow to the rules that apply to the agent definition under review. A rule ente
 
 For each worklist item, evaluate the AL and emit findings. Reframe the correct-build rules as defects to flag:
 
-- **Missing `User Security ID : Guid` on the setup page source table.** The first-time setup page named by `GetFirstTimeSetupPageId` must expose a `User Security ID : Guid` field for BC to inject the new agent's user id. Absence is a `blocker`: the agent cannot be created.
-- **`RegisterCapability` without an `IsCapabilityRegistered` guard.** Duplicate registration throws at install. Flag `major`; suggest wrapping the call. Example of the correct guard:
+- **Missing setup identity field or capability registration guard.** Emit capped agent findings unless curated knowledge applies; direct install/platform failures are separate evidence with a stable agent-type/check occurrence key. Suggest the mechanical guard where determinable:
 
   ```al
   if not CopilotCapability.IsCapabilityRegistered(Enum::"Copilot Capability"::"My Agent Capability") then
@@ -60,14 +59,12 @@ For each worklist item, evaluate the AL and emit findings. Reframe the correct-b
           LearnMoreUrlTxt);
   ```
 
-- **No paired Copilot Capability registration at all.** Without the `Copilot Capability` enum value and its runtime registration the agent never appears in the Copilot & agent capabilities page and refuses to run. Flag `blocker`.
-- **`AnalyzeAgentTaskMessage` mutating the input message.** Only `Type::Output` may be mutated; the input is the user's record. Mutating input (no `if AgentTaskMessage.Type <> AgentTaskMessage.Type::Output then exit;` guard) is a `major` correctness defect.
+- **Missing paired capability or input-message mutation.** Emit capped agent findings unless curated knowledge applies; direct runtime/platform failures are separate evidence with a stable agent-type/check occurrence key.
 - **Raising `Severity::Error` on minor or recoverable issues.** `Error` halts the task; prefer `Warning` plus intervention suggestions. Flag `minor` when a recoverable condition is escalated to `Error`.
-- **`ShowCanCreateAgent` returning `false` with no alternative path.** This makes the agent type permanently uncreatable. Flag `major`. Conversely, leaving creation open when the design intends admin-only (no `CurrentUserHasCanManageAllAgentsPermission()` gate on BC 28.1+) is a `minor` permission finding naming the `bc-version` dimension.
-- **Invalid availability or billing enum values.** Availability must be `Preview` or `Generally Available`; billing must be `Custom Billed`, `Microsoft Billed`, or `Not Billed`. An invalid token is `major`.
+- **Creation-path and enum-value defects.** Emit capped agent findings unless curated knowledge applies; direct compiler/platform validation is separate evidence with a stable agent-type/check occurrence key.
 - **Bypassing `Agent Message.UpdateText` for text changes.** Direct field writes to message text are unsafe; flag `minor` and recommend `UpdateText`.
 
-Cite a `style` or `security` knowledge file in `references` when a finding maps onto one (for example a hard-coded user-facing annotation message that should be a `Label`); otherwise emit an agent finding within this skill's domain (`references: []`, `id` prefixed `agent:`, severity capped per `skills/do.md`). Set `confidence` to `high` for unambiguous interface or enum matches, `medium` for heuristic detections or when any frontmatter dimension was `unknown`, and `low` for applicability-only advisories. For mechanical fixes (add the `IsCapabilityRegistered` guard, add the `Type::Output` guard line, correct an enum value), emit `findings[].suggested-code` with the literal replacement; otherwise set `suggested-code-omission-reason`. See `skills/do.md` for the full contract.
+Cite a `style` or `security` knowledge file when one maps; otherwise emit a capped agent finding. A direct compiler/install/platform failure is separate evidence with a stable agent-type/check occurrence key. `high` confidence is available only to unambiguous knowledge-backed findings or deterministic tool observations; agent findings remain at `medium` or lower.
 
 Outcome selection: `completed` when every worklist item was evaluated (including an empty `findings` array); `no-knowledge` when no applicable rule survived Source, Relevance, and configuration filtering; `not-applicable` when the change defines no agent and touches no Agent SDK surface; `partial` when a budget was hit before the worklist was exhausted; `failed` on an unrecoverable error (`outcome-reason` required).
 
@@ -80,25 +77,27 @@ Output conforms to the DO output contract. A populated example:
   "skill": { "id": "al-ai-agent-sdk", "version": 1 },
   "outcome": "completed",
   "summary": {
-    "counts": { "blocker": 1, "major": 1, "minor": 0, "info": 0 },
+    "counts": { "blocker": 0, "major": 0, "minor": 2, "info": 0 },
     "coverage": { "worklist-size": 6, "items-evaluated": 6 }
   },
   "findings": [
     {
       "id": "agent:setup-page-missing-user-security-id",
-      "severity": "blocker",
+      "severity": "minor",
       "message": "The first-time setup page returned by GetFirstTimeSetupPageId has a source table with no 'User Security ID : Guid' field. BC injects the new agent's user id into that field, so creation will fail. Recommendation: add a field of type Guid named 'User Security ID' to the source table.",
       "location": { "file": "src/Agent/MyAgentSetup.Page.al", "line": 12 },
       "references": [],
-      "confidence": "high"
+      "confidence": "medium",
+      "domain": "AI Agent SDK"
     },
     {
       "id": "agent:register-capability-unguarded",
-      "severity": "major",
+      "severity": "minor",
       "message": "RegisterCapability is called without a preceding IsCapabilityRegistered check, so a re-install throws on duplicate registration. Recommendation: guard the call with IsCapabilityRegistered.",
       "location": { "file": "src/Agent/MyAgentInstall.Codeunit.al", "line": 18 },
       "references": [],
-      "confidence": "high",
+      "confidence": "medium",
+      "domain": "AI Agent SDK",
       "suggested-code": "        if not CopilotCapability.IsCapabilityRegistered(Enum::\"Copilot Capability\"::\"My Agent Capability\") then\n            CopilotCapability.RegisterCapability("
     }
   ],

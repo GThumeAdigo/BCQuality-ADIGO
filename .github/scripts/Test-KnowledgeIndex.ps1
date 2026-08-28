@@ -38,11 +38,13 @@ $tmp = Join-Path ([System.IO.Path]::GetTempPath()) ("kbindex_" + [guid]::NewGuid
 New-Item -ItemType Directory -Force -Path $tmp | Out-Null
 $idxA = Join-Path $tmp 'a.json'
 $idxB = Join-Path $tmp 'b.json'
+$idxFiltered = Join-Path $tmp 'filtered.json'
 
 $problems = [System.Collections.Generic.List[string]]::new()
 
 & $generator -BCQualityRoot $Root -IndexPath $idxA | Out-Null
 & $generator -BCQualityRoot $Root -IndexPath $idxB | Out-Null
+& $generator -BCQualityRoot $Root -IndexPath $idxFiltered -EnabledLayers microsoft, custom | Out-Null
 
 # 1. Determinism (ignoring the volatile generatedAt timestamp).
 $norm = { param($p) ((Get-Content -LiteralPath $p -Raw) -replace '"generatedAt":"[^"]*"', '"generatedAt":"<n>"') }
@@ -52,6 +54,41 @@ if ((& $norm $idxA) -ne (& $norm $idxB)) {
 
 $index = Get-Content -LiteralPath $idxA -Raw | ConvertFrom-Json
 $rows = @($index.articles)
+if ($index.version -ne 2) {
+    $problems.Add("Unexpected index version: $($index.version).") | Out-Null
+}
+if ([string]::IsNullOrWhiteSpace([string]$index.sourceTreeDigest)) {
+    $problems.Add('Default index sourceTreeDigest is missing.') | Out-Null
+}
+$expectedEffectiveLayers = @(('microsoft', 'community', 'custom') | Where-Object { Test-Path (Join-Path $Root $_) })
+if ((@($index.enabledLayers) -join ',') -ne ($expectedEffectiveLayers -join ',')) {
+    $problems.Add("Default enabledLayers metadata does not reflect effective layers: $(@($index.enabledLayers) -join ',').") | Out-Null
+}
+
+$filteredIndex = Get-Content -LiteralPath $idxFiltered -Raw | ConvertFrom-Json
+if ((@($filteredIndex.enabledLayers) -join ',') -ne 'microsoft,custom') {
+    $problems.Add("Filtered enabledLayers metadata is incorrect: $(@($filteredIndex.enabledLayers) -join ',').") | Out-Null
+}
+$unexpectedFilteredLayers = @($filteredIndex.articles | Where-Object { $_.layer -notin @('microsoft', 'custom') })
+if ($unexpectedFilteredLayers.Count) {
+    $problems.Add('Filtered index contains articles from a disabled layer.') | Out-Null
+}
+$expectedFilteredPaths = @(
+    foreach ($layer in 'microsoft', 'custom') {
+        $knowledgeRoot = Join-Path $Root "$layer/knowledge"
+        if (Test-Path $knowledgeRoot) {
+            Get-ChildItem -LiteralPath $knowledgeRoot -Recurse -File -Filter '*.md' |
+                ForEach-Object { ($_.FullName.Substring($Root.Length).TrimStart([char]'/', [char]'\') -replace '\\', '/') }
+        }
+    }
+)
+$actualFilteredPaths = @($filteredIndex.articles | ForEach-Object path)
+if ((Compare-Object $expectedFilteredPaths $actualFilteredPaths).Count) {
+    $problems.Add('Filtered index article set does not exactly match the enabled layers.') | Out-Null
+}
+if ([string]::IsNullOrWhiteSpace([string]$filteredIndex.sourceTreeDigest)) {
+    $problems.Add('Filtered index sourceTreeDigest is missing.') | Out-Null
+}
 
 # 2. Coverage: one row per knowledge .md, every path real, no duplicates.
 $onDisk = @(

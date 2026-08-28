@@ -1,9 +1,9 @@
 ---
 kind: action-skill
-id: spec-init
+id: portable-spec-init
 version: 2
 title: Project Definition Review
-description: Reviews a Business Central project definition for completeness, internal consistency, and actionable delivery boundaries, and emits a findings report.
+description: Portable review of a supplied Business Central project definition; it checks completeness without defining scaffold initialization governance.
 inputs: [repository]
 outputs: [findings-report]
 bc-version: [all]
@@ -50,7 +50,7 @@ Output conforms to the DO output contract. Example agent finding:
 
 ```json
 {
-  "skill": { "id": "spec-init", "version": 2 },
+  "skill": { "id": "portable-spec-init", "version": 2 },
   "outcome": "completed",
   "summary": {
     "counts": { "blocker": 0, "major": 0, "minor": 1, "info": 0 },

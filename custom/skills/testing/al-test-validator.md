@@ -70,7 +70,8 @@ Output conforms to the DO output contract. Findings without a knowledge file are
       "message": "PostAndAssertNoChange posts a document but TransactionModel is unset, so posting rolls back at test end and the state-after-post assertion never observes a committed change.",
       "location": { "file": "test/EventRegistrationTests.al", "line": 88 },
       "references": [ { "path": "microsoft/knowledge/testing/transactionmodel-attribute-governs-test-transactions.md" } ],
-      "confidence": "high"
+      "confidence": "high",
+      "domain": "Test Quality"
     },
     {
       "id": "agent:implementation-named-test",
@@ -79,6 +80,7 @@ Output conforms to the DO output contract. Findings without a knowledge file are
       "location": { "file": "test/EventRegistrationTests.al", "line": 40 },
       "references": [],
       "confidence": "medium",
+      "domain": "Test Quality",
       "suggested-code": "    procedure ReleaseRegistrationShouldEmitTelemetry()"
     }
   ],

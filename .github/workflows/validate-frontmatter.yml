@@ -23,3 +23,6 @@ jobs:
 
       - name: Run validator
         run: python .github/scripts/validate_frontmatter.py --root .
+
+      - name: Run semantic and routing tests
+        run: python .github/scripts/test_semantics.py

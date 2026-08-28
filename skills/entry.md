@@ -19,7 +19,8 @@ The agent invokes Entry with a **task context** supplied by the orchestrator:
 
 ```yaml
 task-context:
-  goal: string            # free-text description of what needs doing
+  goal: string            # required for fuzzy routing; optional when requested-skill-id is present
+  requested-skill-id: string # optional exact action-skill id
   inputs-available:       # values the orchestrator has ready to pass to a chosen skill
     - pr-diff
     - file-path
@@ -31,7 +32,7 @@ task-context:
   disabled-skills: []     # repo-relative paths the consumer has opted out of
 ```
 
-`goal` and `inputs-available` are required. Filter dimensions (`technologies`, `bc-version`, `countries`, `application-area`) are optional; omitting a dimension is equivalent to "unconstrained" — see Relevance for the exact matching rule. `enabled-layers` defaults to all three. `disabled-skills` defaults to empty.
+`inputs-available` is required. `goal` is required only when `requested-skill-id` is absent; exact-id calls may omit it. `requested-skill-id` requests deterministic exact-id routing before goal matching. Filter dimensions (`technologies`, `bc-version`, `countries`, `application-area`) are optional; omitting a dimension is equivalent to "unconstrained" — see Relevance for the exact matching rule. `enabled-layers` defaults to all three. `disabled-skills` defaults to empty.
 
 ## Preparation — knowledge index
 
@@ -40,10 +41,10 @@ Before routing, ensure the knowledge index is current for the **live** clone. Th
 - If `knowledge-index.json` is absent — or you cannot confirm it reflects the current knowledge tree — regenerate it by running, from the checkout root:
 
   ```
-  pwsh ./tools/Build-KnowledgeIndex.ps1
+  python3 ./tools/build_knowledge_index.py --enabled-layer microsoft,community,custom
   ```
 
-  It defaults to indexing this checkout and writes `knowledge-index.json` at the root in well under a second. When in doubt, rebuild: a sub-second rebuild is always cheaper than a stale or over-listing index, which is a correctness risk.
+  Pass the effective `task-context.enabled-layers` value, including its default of all three layers. `tools/Build-KnowledgeIndex.ps1` remains an equivalent entry point when `pwsh` is installed; when it is not, the Python command above is the required cross-platform fallback. The index metadata `enabledLayers` and `sourceTreeDigest` MUST reflect the effective source tree; an absent, stale, or different value requires regeneration. The script writes `knowledge-index.json` at the root in well under a second. When in doubt, rebuild.
 - This is a side step. It MUST NOT change Entry's output — the dispatch record below is the only thing Entry emits, and build logs are never part of the dispatch JSON.
 
 Generation is **owned by BCQuality**: the generator ships here next to the skills and knowledge it derives from, and the consuming orchestrator neither builds nor knows about the index.
@@ -67,9 +68,10 @@ Candidates that fail any condition go to `skipped` with the corresponding reason
 
 Narrow the relevant set to the skills that will actually be dispatched:
 
-1. **Goal match.** Score each candidate's `description` and `id` against `task-context.goal`. Drop candidates that do not plausibly address the goal; record them in `skipped` with `reason: "goal-mismatch"`. Scoring is implementation-defined; agents MUST prefer exact keyword overlap before fuzzy signals.
-2. **Super-skill precedence.** When a super-skill and any skill listed in its `sub-skills` are both in the remaining set, the super-skill supersedes the sub-skill **only when the goal is a broader match for the super-skill than for the sub-skill**. When the goal specifically names a concern the sub-skill handles (for example, goal = *"performance review"* with `al-code-review` and `al-performance-review` both present), the sub-skill wins and the super-skill is dropped with `reason: "narrower-sub-skill-selected"`. Otherwise the super-skill wins and each listed sub-skill in the set is dropped with `reason: "superseded-by-super-skill"`. The principle is: Entry dispatches the narrowest skill that satisfies the goal. A dropped sub-skill's `skipped` entry MUST carry `superseded-by` naming the super-skill that won; a dropped super-skill's entry MUST carry `superseded-by` naming the winning sub-skill.
-3. **Layer precedence.** When two remaining candidates share the same `id` across layers, keep the highest-precedence one. Skill layer precedence is `/custom/` over `/community/` over `/microsoft/` — the same ordering READ defines for knowledge files. Drop the losers with `reason: "layer-precedence"` and `superseded-by` naming the winning path.
+1. **Exact-id selection.** When `task-context.requested-skill-id` is present, invoke `python3 tools/route_entry.py --root . --task-context <task-context.json>` and return its dispatch record. The reference router retains only candidates whose `id` equals the request byte-for-byte, then applies inputs, dimensions, enabled/disabled layers, and `/custom/` over `/community/` over `/microsoft/` precedence. Nonmatching ids are not considered and therefore do not appear in `skipped`. Do not fuzzy-match `goal`, apply super-skill precedence, or dispatch similarly named ids. If no relevant candidate has the exact id, the dispatch is empty and Entry returns `no-match`.
+2. **Goal match.** Only when `requested-skill-id` is absent, score each candidate's `description` and `id` against `task-context.goal`. Drop candidates that do not plausibly address the goal; record them in `skipped` with `reason: "goal-mismatch"`. Scoring is implementation-defined; agents MUST prefer exact keyword overlap before fuzzy signals.
+3. **Super-skill precedence.** When a super-skill and any skill listed in its `sub-skills` are both in the remaining set, the super-skill supersedes the sub-skill **only when the goal is a broader match for the super-skill than for the sub-skill**. When the goal specifically names a concern the sub-skill handles (for example, goal = *"performance review"* with `al-code-review` and `al-performance-review` both present), the sub-skill wins and the super-skill is dropped with `reason: "narrower-sub-skill-selected"`. Otherwise the super-skill wins and each listed sub-skill in the set is dropped with `reason: "superseded-by-super-skill"`. The principle is: Entry dispatches the narrowest skill that satisfies the goal. A dropped sub-skill's `skipped` entry MUST carry `superseded-by` naming the super-skill that won; a dropped super-skill's entry MUST carry `superseded-by` naming the winning sub-skill.
+4. **Layer precedence.** When two remaining candidates share the same `id` across layers, keep the highest-precedence one. Skill layer precedence is `/custom/` over `/community/` over `/microsoft/` — the same ordering READ defines for knowledge files. Drop the losers with `reason: "layer-precedence"` and `superseded-by` naming the winning path.
 
 Each dropped candidate appears in `skipped[]` at most once; record the first reason that caused the drop.
 

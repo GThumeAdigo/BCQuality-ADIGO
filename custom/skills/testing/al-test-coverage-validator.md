@@ -7,7 +7,7 @@ description: Reports AL test coverage shape and identifies untested branches, er
 inputs: [pr-diff, repository]
 outputs: [findings-report]
 bc-version: [all]
-technologies: [al]
+technologies: [al, xml, json]
 countries: [w1]
 application-area: [all]
 ---
@@ -27,7 +27,7 @@ Read the BCQuality knowledge index once (the `knowledge-index.json` Entry's prep
 Apply the frontmatter matching rules defined in READ against the task context:
 
 - `bc-version`: the target BC version from the repository `app.json`, or `unknown` if unavailable.
-- `technologies`: `[al]`.
+- `technologies`: the intersection of `[al, xml, json]` present in source and coverage artifacts.
 - `countries`: the consuming app's declared countries, or `unknown`.
 - `application-area`: the application areas of the changed objects, or `unknown`.
 
@@ -74,6 +74,7 @@ Output conforms to the DO output contract. Coverage gaps are agent findings (`re
       "location": { "file": "src/Sales/EventRegistrationMgt.Codeunit.al" },
       "references": [],
       "confidence": "medium",
+      "domain": "Test Coverage",
       "suggested-code-omission-reason": "coverage gap is closed by adding a test, not a local code edit"
     },
     {
@@ -83,6 +84,7 @@ Output conforms to the DO output contract. Coverage gaps are agent findings (`re
       "location": { "file": "src/Sales/EventRegistrationMgt.Codeunit.al" },
       "references": [],
       "confidence": "medium",
+      "domain": "Test Coverage",
       "suggested-code-omission-reason": "coverage gap is closed by adding a test, not a local code edit"
     }
   ],

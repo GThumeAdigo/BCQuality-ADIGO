@@ -48,7 +48,7 @@ A curated `testing` or `ux` file enters the worklist when its `keywords` interse
 
 ## Action
 
-For each mappable section, generate a TestPage codeunit as described in the worklist and emit one finding carrying it. Where a curated `testing` or `ux` file backs a generation choice (an isolation rule, a handler-function convention, a TestPage interaction pattern), cite it: `id` equal to the file path, `references` carrying it, `severity` `info`, `confidence` `high` for an unambiguous match. Where no curated file applies, emit an agent finding: `references: []`, `id` slug prefixed `agent:` (for example `agent:generated-userguide-test`), `confidence` capped at `medium`, `severity` capped at `minor`, and a self-contained `message` naming the section, the steps covered, and the file path the codeunit should be written to. Put the generated AL in `suggested-code`. For a section that cannot be cleanly mapped, emit a separate agent finding (`id` slug `agent:unmappable-userguide-step`) naming the section, the step, why it could not map, and the recommended workaround (for example a parent-subpage navigation pattern, or a note that a server-side behaviour needs a non-UI test); omit `suggested-code` and set `suggested-code-omission-reason` to `step cannot be expressed through a TestPage primitive`. When the extension has no seed library, emit an `info` finding recommending one. Hold every agent finding to the precision bar in `skills/do.md`.
+For each mappable section, generate a TestPage codeunit and emit one capped agent finding carrying it in `suggested-code`. Curated testing or UX knowledge informs the artifact but is cited only when the input or generated artifact concretely violates it, never merely because the artifact satisfies it. For an unmappable section, emit a capped agent finding naming the exact step and workaround. A missing seed library is a finding only when the supplied guide requires deterministic seed behavior and the repository demonstrably has no equivalent fixture mechanism; emit it as a capped agent finding, not applicability-only info.
 
 Outcome selection: `completed` when every section was processed (mapped to a codeunit or reported as unmappable); `not-applicable` when the supplied path is not a user guide or no driven page exists in the repository; `no-knowledge` when no curated knowledge survived and no agent finding was raised; `partial` or `failed` per the DO contract with `outcome-reason`.
 
@@ -61,7 +61,7 @@ Output conforms to the DO output contract. Generated codeunits with no curated b
   "skill": { "id": "al-userguide-test-writer", "version": 1 },
   "outcome": "completed",
   "summary": {
-    "counts": { "blocker": 0, "major": 0, "minor": 1, "info": 0 },
+    "counts": { "blocker": 0, "major": 0, "minor": 2, "info": 0 },
     "coverage": { "worklist-size": 2, "items-evaluated": 2 }
   },
   "findings": [

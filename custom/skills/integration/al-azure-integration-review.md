@@ -7,7 +7,7 @@ description: Reviews the Azure integration plane that sits between Business Cent
 inputs: [pr-diff, file-path, repository]
 outputs: [findings-report]
 bc-version: [all]
-technologies: [powershell]
+technologies: [bicep, terraform, json, xml, yaml, powershell, github-actions, azure-devops]
 countries: [w1]
 application-area: [all]
 ---
@@ -20,14 +20,14 @@ An orchestrator invokes this skill with a `pr-diff` or `file-path` (a change to 
 
 ## Source
 
-The rule set is this skill's own Azure integration-plane house rules, plus the `integration` knowledge domain in BCQuality where a plane rule maps onto a curated rule (idempotency, correlation, classify-transient-vs-permanent, subscription health). Read the BCQuality knowledge index once and take the `integration` domain entries as the citable candidate set across every enabled layer; do not open an article's body until it enters the Worklist. The Azure-resource and IaC rules are not vendored in the corpus; for a concrete violation there, emit an agent finding within this skill's integration-plane domain (`house:<slug>` or `agent:` prefix, `references: []`).
+The rule set is this skill's Azure integration-plane checks plus the `integration` knowledge domain where a plane rule maps onto a curated rule. Read the BCQuality knowledge index once and take the `integration` entries as the citable candidate set. Azure-resource and IaC source observations without curated backing are `agent:` findings capped by DO. Direct `az deployment validate`, Bicep, Terraform, ARM, or Azure platform-validator failures may be separate deterministic evidence with a stable resource/check occurrence key when named tool output is available; `house:` is not a valid uncited finding class.
 
 ## Relevance
 
 Apply the frontmatter matching rules defined in READ against the task context:
 
 - `bc-version` - the target BC version from the consuming app's `app.json`, or `unknown`.
-- `technologies` - `[powershell]`; the plane is provisioned and reviewed through IaC and pipeline tooling rather than AL.
+- `technologies` - intersect the task with every declared frontmatter technology: `[bicep, terraform, json, xml, yaml, powershell, github-actions, azure-devops]`.
 - `countries` - from the consuming app's `app.json`, else `unknown`.
 - `application-area` - the areas served by the integration flow; pass the actual set, do not substitute `[all]`.
 
@@ -41,13 +41,13 @@ The validator places each Azure artifact on the same four arrows the BC side use
 - Logic App / workflow definitions (`workflow.json`, `*.logicapp.json`, Standard `workflow` folders).
 - Function app config (`host.json`, `function.json`, retry and binding config).
 - APIM policy XML (inbound, backend, outbound, on-error sections).
-- Pipeline files that deploy the above, when present.
+- GitHub Actions and Azure DevOps YAML pipeline files that deploy the above, when present.
 
 A rule enters the worklist when the artifact under review touches its area.
 
 ## Action
 
-For each worklist item, evaluate the artifact and emit findings. The citable rules are emitted as `house:<slug>` with empty `references[]` unless a curated `integration`-domain file matches, in which case cite it instead.
+For each worklist item, evaluate the artifact and emit findings. Cite a matching `integration` knowledge file; otherwise use a capped `agent:<slug>` finding. Use separate deterministic evidence with a stable resource/check occurrence key only for a direct named validator/tool observation.
 
 ### Receiver and staging
 
@@ -94,9 +94,9 @@ A complete review pairs this skill with `al-modern-integration-patterns`. The ar
 - BC parks a long-running message Awaiting Reply; the plane must drive the poll (`house:long-running-status-url` ↔ `house:az-202-status-poll`).
 - BC relies on Business Event subscriptions; the plane must monitor their health (`house:subscription-health-monitor` ↔ `house:az-subscription-health-check`).
 
-A violation of a hard rule that breaks the flow end to end (a receiver that posts inline, a stripped idempotency key, a 4xx retried forever, secrets inline in Bicep) is a `blocker`. A configuration gap that degrades resilience or observability without breaking the happy path (missing dead-letter config, no Application Insights, retry left on silent defaults) is `major`. A hygiene or hardening gap (TLS minimum not pinned, a Function public where APIM should front it) is `minor`. When a rule is clearly applicable but no violation is detected, emit `info` citing the rule.
+Knowledge-backed findings use the cited rule's impact. Direct named-tool/platform failures use separate deterministic evidence with a stable resource/check occurrence key and may gate. Uncited source-review findings use `agent:` ids, severity no higher than `minor`, and confidence no higher than `medium`. Passing deployment validation belongs in `summary.validation`, not findings.
 
-Set `confidence` to `high` for unambiguous IaC or policy-XML matches, `medium` for heuristic detections or when any frontmatter dimension was `unknown`, and `low` for applicability-only advisories. Provide `suggested-code` only for mechanical, local fixes (add a `dead-letter` setting, pin `minTlsVersion`, replace an inline secret with a Key Vault reference); otherwise set `suggested-code-omission-reason`. See `skills/do.md` for the full contract.
+Use `high` confidence only for unambiguous knowledge-backed findings or direct named-validator evidence. Uncited IaC/policy review findings remain at `medium` or lower. Provide `suggested-code` only for mechanical local fixes.
 
 Outcome selection: `completed` when every worklist item was evaluated (including an empty `findings` array); `no-knowledge` when no applicable rule survived Source, Relevance, and configuration filtering; `not-applicable` when the repository contains no Azure plane artifacts to review; `partial` when a budget was hit before the worklist was exhausted; `failed` on an unrecoverable error (`outcome-reason` required).
 
@@ -109,25 +109,27 @@ Output conforms to the DO output contract. A populated example:
   "skill": { "id": "al-azure-integration-review", "version": 1 },
   "outcome": "completed",
   "summary": {
-    "counts": { "blocker": 1, "major": 1, "minor": 0, "info": 0 },
+    "counts": { "blocker": 0, "major": 0, "minor": 2, "info": 0 },
     "coverage": { "worklist-size": 4, "items-evaluated": 4 }
   },
   "findings": [
     {
-      "id": "house:az-classify-transient-vs-permanent",
-      "severity": "blocker",
+      "id": "agent:az-classify-transient-vs-permanent",
+      "severity": "minor",
       "message": "The Logic App retry policy retries on every HTTP status including 4xx, so an invalid-data response is retried indefinitely instead of routed to a dead-letter path. Recommendation: classify transient (408, 429, 5xx, timeout) versus permanent (4xx) and only retry the transient set.",
       "location": { "file": "infra/logicapps/order-router.logicapp.json", "line": 62 },
       "references": [],
-      "confidence": "high"
+      "confidence": "medium",
+      "domain": "Azure Integration"
     },
     {
-      "id": "house:az-secrets-in-keyvault",
-      "severity": "major",
+      "id": "agent:az-secrets-in-keyvault",
+      "severity": "minor",
       "message": "A storefront API key is supplied as an inline Bicep parameter literal rather than referenced from Key Vault via Managed Identity. Recommendation: move the secret to Key Vault and reference it with a getSecret() call.",
       "location": { "file": "infra/main.bicep", "line": 88 },
       "references": [],
-      "confidence": "high"
+      "confidence": "medium",
+      "domain": "Azure Integration"
     }
   ],
   "suppressed": []

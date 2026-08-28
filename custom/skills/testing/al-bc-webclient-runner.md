@@ -52,37 +52,52 @@ A curated `ux` or `testing` file enters the worklist when its `keywords` interse
 
 ## Action
 
-Drive the web client through each worklisted step, screenshot the result, and assert on the documented outcome. The skill requires a Chrome automation surface in the calling session; if it is unavailable, do not fall back to anything else: emit `outcome: "failed"` with `outcome-reason` stating the surface is missing.
+Drive the web client through each worklisted step, screenshot the result, and assert on the documented outcome. Accept a `continue-on-fail` option, default `false`; when true, capture the failed step and continue with independent steps, marking dependent steps skipped in the summary. After every step and after every failure, capture browser console errors and failed network requests (HTTP failure or transport error) and associate their artifact paths with the step. The skill requires a Chrome automation surface in the calling session; if it is unavailable, emit `outcome: "failed"` with `outcome-reason` stating the surface is missing.
 
-Emit a finding for every rendered-UI defect. Where a curated `ux` or `testing` file states the rule (for example a delayed-insert rule, a refresh-after-validate rule, or a state-label-consistency rule), emit a knowledge-backed finding citing it: `id` equal to the file path, `severity` up to `major`, `blocker` only when the file states a platform-level guarantee, `confidence` `high` for an unambiguous match. Where no curated file covers the observed defect, emit an agent finding within this skill's domain: `references: []`, `id` slug prefixed `agent:` (for example `agent:userguide-action-disabled`, `agent:subpage-missing-delayed-insert`, `agent:factbox-stale`, `agent:state-label-drift`), `confidence` capped at `medium`, `severity` capped at `minor`, and a self-contained `message` carrying the section, the step, what was observed against what the guide promised, and the screenshot path. When the underlying impact would otherwise be major (a subpage missing `DelayedInsert = true` corrupting the parent FK, or state-label drift that breaks every downstream filter), keep the emitted `severity` at `minor` but say so plainly in the `message` and note the concern should be promoted to a curated rule before it can gate. Record the role the run used and the URL in the summary. Hold every agent finding to the precision bar in `skills/do.md`. The fix lives in AL, not in a renderable replacement, so omit `suggested-code` and set `suggested-code-omission-reason` to `fix is an AL change the developer applies after reading the report`.
+Emit deterministic evidence when a direct browser assertion against a documented expected outcome fails. Use `id: evidence:browser-assertion-failed` and a stable lower-case `<guide-section>/<step>/<assertion>` occurrence key, `kind: browser-assertion`, the flow/step artifact bundle as source, `status: assertion-failed`, and set `gating` from whether the expected outcome is required. A directly captured console error or failed request uses a separate `evidence:browser-console-error` or `evidence:browser-network-request-failed` finding with its own stable section/step/assertion occurrence key only when the browser tool attributes it to the step; otherwise it is context in the summary. Curated rule violations and AL root-cause hypotheses are separate findings and MUST NOT be merged with browser evidence. Record role, URL, continue-on-fail, assertion counts, console artifact, failed-request artifact, and screenshots in `summary.execution`. Passing assertions belong only in the summary.
 
 Outcome selection: `completed` when every attempted step was driven and asserted (including a clean run with empty `findings`); `not-applicable` when the supplied path is not a user guide or the repository drives no rendered page; `partial` when a block stopped the run mid-flow and not every section was attempted (`summary.coverage` reflects the attempted subset); `failed` when the Chrome surface was unavailable or the run could not start, with `outcome-reason` required.
 
 ## Output
 
-Output conforms to the DO output contract. Rendered-UI defects with no curated backing are agent findings (`references: []`, `agent:` id, severity capped at `minor`); findings citing a `ux` or `testing` file carry that file path as `id` and primary reference.
+Output conforms to the DO output contract. Direct required expected-outcome failures are gating deterministic browser evidence. Root-cause hypotheses remain separate capped agent findings.
 
 ```json
 {
   "skill": { "id": "al-bc-webclient-runner", "version": 1 },
   "outcome": "completed",
   "summary": {
-    "counts": { "blocker": 0, "major": 0, "minor": 2, "info": 0 },
-    "coverage": { "worklist-size": 9, "items-evaluated": 9 }
+    "counts": { "blocker": 2, "major": 0, "minor": 1, "info": 0 },
+    "coverage": { "worklist-size": 9, "items-evaluated": 9 },
+    "execution": { "status": "failed", "continue-on-fail": true, "assertions-attempted": 9, "assertions-passed": 7, "assertions-failed": 2, "assertions-skipped": 0, "console-artifact": "artifacts/console.json", "failed-requests-artifact": "artifacts/failed-requests.json" }
   },
   "findings": [
     {
-      "id": "agent:userguide-action-disabled",
-      "severity": "minor",
-      "message": "Section 3.2: Release on the Freight Movement card is disabled although the guide says it should be enabled once the header is filled (aria-disabled=true on the command-bar item). Screenshot: screenshots/section-3-step-2-release-disabled.png. Verify the action's Enabled expression against the header-filled state.",
+      "id": "evidence:browser-assertion-failed",
+      "occurrence-key": "section-3.2/step-2/release-action-enabled",
+      "severity": "blocker",
+      "message": "Section 3.2 step 2 required Release to be enabled after the header was filled; the browser accessibility assertion observed aria-disabled=true.",
       "references": [],
-      "confidence": "medium",
+      "confidence": "high",
+      "evidence": { "kind": "browser-assertion", "source": "section-3.2/step-2/screenshots/release-disabled.png", "status": "assertion-failed" },
+      "gating": true,
       "suggested-code-omission-reason": "fix is an AL change the developer applies after reading the report"
     },
     {
-      "id": "agent:subpage-missing-delayed-insert",
+      "id": "evidence:browser-assertion-failed",
+      "occurrence-key": "section-5.1/step-1/subpage-row-remains-in-parent-filter",
+      "severity": "blocker",
+      "message": "Section 5.1 step 1 required the new line to remain in the parent filter after tabbing off; the browser observed an out-of-filter banner and a blank No. column.",
+      "references": [],
+      "confidence": "high",
+      "evidence": { "kind": "browser-assertion", "source": "section-5.1/step-1/screenshots/out-of-filter.png", "status": "assertion-failed" },
+      "gating": true,
+      "suggested-code-omission-reason": "fix is an AL change the developer applies after reading the report"
+    },
+    {
+      "id": "agent:subpage-may-need-delayed-insert",
       "severity": "minor",
-      "message": "Section 5.1: typing into the line subpage then tabbing off shows an out-of-filter banner and a blank No. column, indicating the subpage is missing DelayedInsert = true. Impact is major: OnInsert fires before the number series assigns the PK, so the row persists with a blank or wrong parent FK. Promote to a curated rule before it can gate.",
+      "message": "The section 5.1 browser failure is consistent with missing or incorrect DelayedInsert and SubPageLink handling, but the browser does not prove that AL root cause. Inspect the subpage properties and insert trigger.",
       "references": [],
       "confidence": "medium",
       "suggested-code-omission-reason": "fix is an AL change the developer applies after reading the report"

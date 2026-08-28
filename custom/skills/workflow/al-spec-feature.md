@@ -1,9 +1,9 @@
 ---
 kind: action-skill
-id: spec-feature
+id: portable-spec-feature
 version: 2
 title: Feature Specification Review
-description: Reviews a Business Central feature specification against its project definition for clear scope, testable outcomes, and unresolved decisions, and emits a findings report.
+description: Portable review of a supplied Business Central feature specification; it checks scope and testability without defining scaffold governance.
 inputs: [repository]
 outputs: [findings-report]
 bc-version: [all]
@@ -50,7 +50,7 @@ Output conforms to the DO output contract. Example agent finding:
 
 ```json
 {
-  "skill": { "id": "spec-feature", "version": 2 },
+  "skill": { "id": "portable-spec-feature", "version": 2 },
   "outcome": "completed",
   "summary": {
     "counts": { "blocker": 0, "major": 0, "minor": 1, "info": 0 },

@@ -7,7 +7,7 @@ description: Executes AL test codeunits via the AL-Go runner or a local containe
 inputs: [repository, object-list]
 outputs: [findings-report]
 bc-version: [all]
-technologies: [al]
+technologies: [al, powershell, xml, json]
 countries: [w1]
 application-area: [all]
 ---
@@ -20,14 +20,14 @@ An orchestrator invokes this skill with a `repository` (the project root to run 
 
 ## Source
 
-Read the BCQuality knowledge index once (the `knowledge-index.json` Entry's preparation step regenerates over the live, already-filtered clone). Take the index entries whose `domain` is `testing` or `pipelines` as the citable candidate set across every enabled layer: runner-selection, isolation, and AL-Go pipeline rules can back a finding about how the run was configured. Do not open individual article files at this step; open an article's full body only once it enters the Worklist below. A reported test failure or a runner-startup failure rarely maps onto a curated rule, so it is emitted as an agent finding within this skill's domain (see Action).
+Read the BCQuality knowledge index once. Take the index entries whose `domain` is `testing` or `pipelines` as the citable candidate set across every enabled layer. Do not open individual articles until they enter the Worklist. A red test is direct `test-runner` evidence. A startup failure, timeout, unparseable result, or required-suite-without-runner result is direct `tool-envelope` evidence from runner invocation or deterministic runner discovery. None is an agent finding. A knowledge finding may separately explain a configuration defect but MUST NOT be merged with execution evidence.
 
 ## Relevance
 
 Apply the frontmatter matching rules defined in READ against the task context:
 
 - `bc-version`: the target BC version from the repository `app.json`, or `unknown` if unavailable.
-- `technologies`: `[al]`.
+- `technologies`: the intersection of `[al, powershell, xml, json]` present in tests, runner wiring, and result artifacts.
 - `countries`: the consuming app's declared countries, or `unknown`.
 - `application-area`: the application areas of the test objects, or `unknown`.
 
@@ -37,7 +37,7 @@ Discard files that are not applicable. Retain conditionally applicable files (an
 
 Narrow to the run to perform and the artifacts it produces:
 
-- Runner detection, in order: an AL-Go pipeline (`.AL-Go/settings.json` plus a `BuildALGoProject` script); a Docker BC sandbox via BcContainerHelper (a `BcContainerHelperVersion` setting or a `Run-TestsInBcContainer` call); a project-local `scripts/Build.ps1` or equivalent.
+- Runner detection, in order: configured AL MCP `al_run_tests`; an AL-Go pipeline (`.AL-Go/settings.json` plus a `BuildALGoProject` script); a Docker BC sandbox via BcContainerHelper; a project-local test script.
 - The test codeunits to run: every test codeunit in the repository, narrowed by the `object-list` filter when supplied.
 - The results file the run emits (`TestResults.xml` or equivalent) and the runner console output.
 
@@ -45,15 +45,15 @@ A curated `testing` or `pipelines` file enters the worklist when its `keywords` 
 
 ## Action
 
-Invoke the detected runner with the project's standard arguments, capture its output and the XUnit-style results file, and parse total, passed, failed, and skipped counts. Emit one finding per failed test: an agent finding (`references: []`, `id` slug prefixed `agent:` such as `agent:test-failed`, `confidence` capped at `medium`, `severity` capped at `minor`), with a self-contained `message` carrying the test codeunit, the test procedure, the assertion message, and the source location, and a `location` pointing at the failing line. Keep `severity` at `minor` even though a red test commonly blocks the chain, and say in the `message` that the run failed; the gating decision belongs to `al-test-coverage-enforcer` and the consuming orchestrator, not to this advisory channel. A run with many skipped tests emits an `info` finding naming the skip count. Where a curated `testing` or `pipelines` rule explains a misconfiguration the run surfaced (for example an isolation attribute that produced a spurious failure), upgrade that finding to knowledge-backed and cite the file. Mechanical fixes are rare here (the fix lives in the test or production code, not in the run), so omit `suggested-code` and set `suggested-code-omission-reason` to `fix lives in the test or production source under change`.
+Invoke the detected runner with the project's standard arguments, capture its output and result artifact, and parse total, passed, failed, skipped, and not-executed counts. Put an explicit `summary.execution` object in every report. Emit one deterministic evidence finding per failed test with `id: evidence:test-failed` and a stable lower-case `occurrence-key` derived from `<test-codeunit-id-or-name>/<test-procedure>`; never include the run id or result-file path in that key. The evidence uses `kind: test-runner`, the named runner/report as source, `status: failed`, `gating: true`, `severity: blocker`, and `confidence: high` when attribution is unambiguous. A separate knowledge-backed finding may explain a configuration rule, but MUST NOT be merged with execution evidence.
 
-If the runner cannot start (Docker daemon down, BC image missing, AL-Go misconfigured) or exceeds the configured timeout, do not silently succeed: emit `outcome: "failed"` with `outcome-reason` carrying the exact command attempted and the error output, and an agent finding describing the startup failure.
+If required execution cannot start, produces no parseable result, exceeds the configured timeout, or required tests exist but no runner is detected, return `failed` with a deterministic `evidence:required-test-execution-failed` blocker. Use the canonical `required-suite/<stable-suite-name-or-scope>` occurrence key, `evidence.kind: tool-envelope`, the attempted runner discovery/command as source, status `error` or `timeout`, and `gating: true`. A repository with no test codeunits remains `not-applicable`; a repository with required tests but no runner is never `not-applicable`. The runner owns pass/fail and never delegates it to coverage.
 
 Outcome selection: `completed` when the run finished and every failure was mapped to a finding (including a green run with empty `findings`); `not-applicable` when the repository has no AL test codeunit or no runner could be detected; `partial` when the run was cancelled on timeout after some tests ran (`summary.coverage` reflects the executed subset); `failed` when the runner could not start, with `outcome-reason` required.
 
 ## Output
 
-Output conforms to the DO output contract. Test failures are agent findings (`references: []`, `agent:` id, severity capped at `minor`).
+Output conforms to the DO output contract. Red tests and failed required execution are gating deterministic evidence. A green run has no evidence findings and records its passing counts in `summary.execution`.
 
 ```json
 {
@@ -61,25 +61,22 @@ Output conforms to the DO output contract. Test failures are agent findings (`re
   "outcome": "completed",
   "outcome-reason": "al-go-pipeline runner, 27 tests, 1 failed",
   "summary": {
-    "counts": { "blocker": 0, "major": 0, "minor": 1, "info": 1 },
-    "coverage": { "worklist-size": 27, "items-evaluated": 27 }
+    "counts": { "blocker": 1, "major": 0, "minor": 0, "info": 0 },
+    "coverage": { "worklist-size": 27, "items-evaluated": 27 },
+    "execution": { "status": "failed", "source": "al-go-pipeline/TestResults.xml", "total": 27, "passed": 25, "failed": 1, "skipped": 1, "not-executed": 0 }
   },
   "findings": [
     {
-      "id": "agent:test-failed",
-      "severity": "minor",
-      "message": "Test ReleaseRegistrationShouldFailWhenOverCapacity in codeunit 50202 'Event Registration Tests' failed: expected error 'Capacity exceeded' but got 'Permission denied'. The run is red; fix the production code or the test before the chain can gate. Runner: al-go-pipeline.",
+      "id": "evidence:test-failed",
+      "occurrence-key": "codeunit-50202/releaseregistrationshouldfailwhenovercapacity",
+      "severity": "blocker",
+      "message": "al-go-pipeline reported Test ReleaseRegistrationShouldFailWhenOverCapacity in codeunit 50202 'Event Registration Tests' failed: expected error 'Capacity exceeded' but got 'Permission denied'.",
       "location": { "file": "test/EventRegistrationTests.al", "line": 88 },
       "references": [],
-      "confidence": "medium",
+      "confidence": "high",
+      "evidence": { "kind": "test-runner", "source": "al-go-pipeline/TestResults.xml", "status": "failed" },
+      "gating": true,
       "suggested-code-omission-reason": "fix lives in the test or production source under change"
-    },
-    {
-      "id": "agent:tests-skipped",
-      "severity": "info",
-      "message": "1 test was skipped via an explicit Skip() call (codeunit 50202, SmokeTest). Skipped tests do not fail the run; confirm the skip is intentional.",
-      "references": [],
-      "confidence": "medium"
     }
   ],
   "suppressed": []

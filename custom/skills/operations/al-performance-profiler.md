@@ -49,10 +49,10 @@ A rule enters the worklist when the artifact, capture note, or handoff documenta
 
 For each worklist item, evaluate the artifact or capture context and emit findings:
 
-- A capture that cannot support its stated conclusion (a Job Queue contention claim drawn from a user-facing profile, a network-latency claim, or an SQL-plan claim the profiler never measures) is a `blocker`: the evidence does not back the diagnosis.
-- A capture-window or interpretation-order violation that materially weakens the analysis (a capture far longer than 30 seconds presented as clean signal, jumping to Call Tree before Active Apps and naming the wrong suspect app) is `major`. Cite a `performance`-domain knowledge file in `references` when the flagged pattern is a curated anti-pattern (full-table scan, FlowField-in-loop); otherwise emit an agent finding within this skill's domain.
+- A conclusion unsupported by the supplied capture is capped agent review. A profiler/tool-envelope failure that directly says the required capture is invalid or incomplete is separate deterministic evidence with a stable profile/scope occurrence key and may gate.
+- Cite a `performance` knowledge file when the flagged pattern maps to one. Otherwise emit a capped agent finding. A direct profiler/tool-envelope failure may use separate deterministic evidence with a stable profile/scope occurrence key and hard severity when the named artifact reports it.
 - A handoff gap that slows the partner without invalidating the profile (missing reproduction steps, no expected-versus-actual timing, no BC version or extension list) is `minor`.
-- When a rule is clearly applicable but no violation is detected, emit `info` citing the rule.
+- Record satisfied profiling checks in summary coverage; do not emit findings for them.
 
 Set `confidence` to `high` for unambiguous procedure or pattern matches, `medium` for heuristic detections or when any frontmatter dimension was `unknown`, and `low` for applicability-only advisories. Agent findings carry `references: []`, an `id` prefixed `agent:`, `confidence` capped at `medium`, and a self-contained `message`. Profiling-practice findings are rarely mechanical; provide `suggested-code` only when the fix is a literal edit to a checked-in artifact, otherwise set `suggested-code-omission-reason`. See `skills/do.md` for the full contract.
 
@@ -67,17 +67,18 @@ Output conforms to the DO output contract. A populated example:
   "skill": { "id": "al-performance-profiler", "version": 1 },
   "outcome": "completed",
   "summary": {
-    "counts": { "blocker": 1, "major": 1, "minor": 0, "info": 0 },
+    "counts": { "blocker": 0, "major": 1, "minor": 1, "info": 0 },
     "coverage": { "worklist-size": 5, "items-evaluated": 5 }
   },
   "findings": [
     {
       "id": "agent:profile-cannot-prove-job-queue-contention",
-      "severity": "blocker",
+      "severity": "minor",
       "message": "The triage note blames Job Queue contention based on an .alcpuprofile captured during a user-facing page load. The profiler shows AL-side time only and does not surface queue contention; this conclusion is unsupported. Recommendation: capture during the slow user-facing operation for AL cost, and use server-side telemetry (appi-eql-prod-tenant) to evidence Job Queue contention.",
       "location": { "file": "docs/perf/triage-2026-06.md", "line": 22 },
       "references": [],
-      "confidence": "high"
+      "confidence": "medium",
+      "domain": "Performance Profiling"
     },
     {
       "id": "microsoft/knowledge/performance/filter-before-find.md",
@@ -87,7 +88,8 @@ Output conforms to the DO output contract. A populated example:
       "references": [
         { "path": "microsoft/knowledge/performance/filter-before-find.md" }
       ],
-      "confidence": "medium"
+      "confidence": "medium",
+      "domain": "Performance Profiling"
     }
   ],
   "suppressed": []

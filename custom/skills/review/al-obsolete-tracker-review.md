@@ -42,6 +42,7 @@ Narrow to the obsolescence markings under review:
 - `Removed` markings with no prior `Pending` cycle only when the supplied released baseline establishes the prior public state.
 - `Pending` markings that have extended across supplied released baselines, `Pending` symbols still called from inside the extension, `Pending` procedures whose reason names no replacement, obsoleted enum values whose ordinal moved, and removal versions that do not converge on a declared target. Do not infer release age from an `ObsoleteTag` alone.
 - Migration or data-loss concerns only when `deployment-context` establishes that the affected element shipped or may hold persisted data. If the element is unreleased, apply the matching negative knowledge and do not require a migration path; if release status is unknown, omit the deployment-dependent finding.
+- Compatibility-relevant removals and ordinal/signature changes require the supplied released baseline. If one is missing, retain those checks as unevaluated and return `partial` rather than clean.
 
 A curated `upgrade` file enters the worklist when its `keywords` intersect these tokens (for example `obsolete`, `obsoletion`, `enum`, `staging`, `removal`). Read its full body only after it makes the worklist. Resolve layer-precedence conflicts per READ and record dropped files in `suppressed`.
 
@@ -55,7 +56,7 @@ When a concrete hygiene defect has no curated rule (Pending abandoned for severa
 
 Set `domain` to `Obsolescence` on every finding. Set `suggested-code` when the fix is mechanical (adding an `ObsoleteTag` line next to an existing `ObsoleteReason` using the supplied release target); otherwise set `suggested-code-omission-reason` (for example `requires migrating internal callers across multiple files`). Do not emit findings for satisfied rules; compliant worklist items contribute only to coverage.
 
-Outcome selection: `completed` when every marking was evaluated (including an empty `findings`); `no-knowledge` when no curated knowledge survived and no agent finding was raised; `not-applicable` when the task has no obsolescence markings to audit; `partial` or `failed` per the DO contract with `outcome-reason`.
+Outcome selection: `completed` when every marking and applicable compatibility check was evaluated; `not-applicable` when the task has no obsolescence markings; `partial` when compatibility applies but the released baseline or required deployment context is missing; `failed` when supplied baseline evidence cannot be read. Missing baseline evidence cannot produce a clean result.
 
 ## Output
 

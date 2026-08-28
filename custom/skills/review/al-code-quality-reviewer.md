@@ -40,16 +40,19 @@ Narrow to the changed production AL (exclude test objects) and the structural sh
 - Logic codeunits that call `Get`, `Find*`, `SetRange`, `Insert`, `Modify`, `Delete` directly on a record rather than routing through the project's `IDataAccess` interface or its implementation.
 - Table and page objects whose triggers carry non-trivial validation, calculation, or posting logic instead of delegating to a management codeunit.
 - Public procedures whose `Record` parameter cannot be exercised with a temporary record, and procedures that read ambient state (`UserId`, `WorkDate`, `CompanyName`, `Session`) with no override seam.
-- Procedures with high cyclomatic complexity, length over roughly 80 lines, fan-out over ten codeunits, or nesting at five levels or deeper.
+- Procedures reported by the configured complexity tool with cyclomatic complexity above 10, executable length above 80 lines, fan-out above 10 codeunits, or nesting depth at least 5. These thresholds are deterministic only when the named tool reports its measurement; model estimates remain agent findings.
 - Swallowed errors (`if not Codeunit.Run() then exit` with no handling), empty `Error('')`, and `Commit` inside a loop or without a documented reason.
 - Event subscriber codeunits that mix unrelated subscriptions, hold inline business logic, omit early exit on temporary or wrong record type, or leave `EventSubscriberInstance` unset on a non-trivial subscriber.
 - Telemetry, errors, integrations, or event payloads that expose personal or customer content contrary to a worklisted privacy article.
+- Protected operations and integration boundaries with no injectable telemetry assertion seam (for example an interface or test subscriber) through which tests can assert event id, dimensions, and omission of sensitive values without calling the production sink.
 
 A curated `performance` or `security` file enters the worklist when its `keywords` intersect these tokens (for example `commit`, `loop`, `get`, `integrationevent`, `secret`). Read its full `## Best Practice` / `## Anti Pattern` body only after it makes the worklist. Resolve layer-precedence conflicts per READ and record dropped files in `suppressed`.
 
 ## Action
 
 For each worklisted shape, evaluate the diff and emit findings.
+
+When a configured analyzer directly reports a complexity threshold breach, it may be emitted as deterministic analyzer evidence with the measured value and threshold. Do not label model-counted complexity as evidence. A missing telemetry assertion seam found by source review is a capped agent finding unless a curated rule applies.
 
 When a defect maps onto a curated `performance`, `security`, or `privacy` knowledge file (for example a `Commit` inside an iteration, a redundant `Get` on an already-loaded record, an integration event exposing a secret, or PII in telemetry), emit a knowledge-backed finding citing that file: `id` equal to the file path, the file as primary reference, `severity` up to `blocker` only when the file states a platform-level guarantee otherwise `major`, `confidence` `high` for an unambiguous pattern match.
 

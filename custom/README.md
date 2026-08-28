@@ -38,7 +38,7 @@ Most integration articles ship `.good.al.txt` / `.bad.al.txt` companion samples.
 | `appsource/` | 2 | AppSource validation and major-release governance. |
 | `pipelines/` | 3 | AL-Go pipeline review, environment onboarding, and AL MCP Server workflow review. |
 | `copilot/` | 4 | Copilot PromptDialog, Copilot capability, AI Agent SDK, and AI development toolkit reviews. |
-| `workflow/` | 4 | Portable project-definition, feature-specification, feature-plan, and implementation-conformance reviews. These evaluate supplied artifacts and do not define a consumer's runtime workflow. |
+| `workflow/` | 4 | `portable-*` project-definition, feature-specification, feature-plan, and implementation-conformance reviews. These evaluate supplied artifacts and cannot be confused with a consumer scaffold's governance gates. |
 | `meta/` | 1 | BCQuality consumption and fork/submodule integration review. |
 | `operations/` | 5 | Performance profiling, SaaS restore, RBAC, security-group setup, and MCP troubleshooting procedures. |
 | **Total** | **47** | **Nine skill categories.** |
@@ -47,4 +47,4 @@ Most integration articles ship `.good.al.txt` / `.bad.al.txt` companion samples.
 
 Use this fork as a Git submodule or as a filtered committed vendor tree. Knowledge files in `/custom/knowledge/` follow the same frontmatter schema and section requirements as every other layer. Action skills in `/custom/skills/` follow the Action Skill template defined in `/skills/`; consumer-specific agent names, paths, and gates belong in the consuming scaffold rather than in these portable skills.
 
-When agents consume BCQuality, the custom layer is loaded alongside Microsoft and Community — your overrides apply automatically.
+When agents consume BCQuality, the custom layer is loaded alongside Microsoft and Community — your overrides apply automatically. Portable workflow action ids are `portable-spec-init`, `portable-spec-feature`, `portable-plan-feature`, and `portable-implement-feature`.

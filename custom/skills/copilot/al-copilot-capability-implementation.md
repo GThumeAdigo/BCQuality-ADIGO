@@ -48,7 +48,7 @@ Narrow to the rules that apply to the change under review. A rule enters the wor
 
 For each worklist item, evaluate the AL and emit findings. Reframe the correct-build rules as defects to flag:
 
-- **API key stored as `Text` instead of `SecretText`.** A plain `Text` key is visible in the debugger and at risk of logging. Flag `blocker` and cite the `security` secret-handling rule when one matches:
+- **API key stored as `Text` instead of `SecretText`.** Cite a matching security rule; otherwise emit a capped agent finding. A direct analyzer failure is separate evidence with a stable capability/check occurrence key:
 
   ```al
   procedure SetApiKey(NewKey: SecretText)
@@ -57,8 +57,7 @@ For each worklist item, evaluate the AL and emit findings. Reframe the correct-b
   end;
   ```
 
-- **`RegisterCapability` without the `IsSaaSInfrastructure()` and `IsCapabilityRegistered()` guards.** Missing the SaaS guard registers on unsupported infrastructure; missing the registered guard throws on re-install. Flag `major`.
-- **Illegal billing-type and resource combination.** Validate against the matrix; an illegal pairing fails billing validation at runtime. Flag `major`.
+- **Registration guards and billing/resource combinations.** Emit capped agent findings unless curated knowledge applies; direct platform validation is separate evidence with a stable capability/check occurrence key.
 
   | Partner billing type | BC AI resources | Own AOAI resource |
   |---|---|---|
@@ -66,13 +65,12 @@ For each worklist item, evaluate the AL and emit findings. Reframe the correct-b
   | `Custom Billed` | Never allowed | OK |
   | `Not Billed` | OK (no consumption) | OK (no consumption) |
 
-- **`SetCopilotCapability` not called before generation.** Without it, credit tracking and capability gating do not apply. Flag `major`.
-- **Response read without `IsSuccess()`.** Reading `GetLastMessage()` before checking `AOAIOperationResponse.IsSuccess()` surfaces empty or error content. Flag `major`.
+- **Capability setup and response-order defects.** Emit capped agent findings unless curated knowledge applies.
 - **Metaprompt placed in `AddSystemMessage` instead of `SetPrimarySystemMessage`.** The metaprompt (role, format, guardrails) must persist across evicted history; `AddSystemMessage` content does not. Using the wrong call lets the guardrails silently drop mid-conversation. Flag `minor`.
 - **No output-token reservation against the context window.** A `SetMaxTokens` value plus estimated input that can exceed the model's context window produces truncated responses. Flag `minor` and recommend an `ApproximateTokenCount` check.
-- **Unsupported `System.AI` feature assumed.** Image (DALL-E) or speech (Whisper) usage is out of scope for the module. Flag `major`.
+- **Unsupported `System.AI` feature assumed.** Emit a capped agent finding unless a named platform validator directly rejects it.
 
-Cite a `security` or `style` knowledge file in `references` when a finding maps onto one (for example a missing `DataClassification` on the setup table, or a user-facing error built from a string literal rather than a `Label`); otherwise emit an agent finding within this skill's domain (`references: []`, `id` prefixed `agent:`, severity capped per `skills/do.md`). Set `confidence` to `high` for unambiguous type or API matches, `medium` for heuristic detections or when any frontmatter dimension was `unknown`, and `low` for applicability-only advisories. For mechanical fixes (change a field type to `SecretText`, add the install guards, swap `AddSystemMessage` for `SetPrimarySystemMessage`), emit `findings[].suggested-code`; otherwise set `suggested-code-omission-reason`. See `skills/do.md` for the full contract.
+Cite a `security` or `style` knowledge file when one maps; otherwise emit a capped agent finding. A direct analyzer/platform failure is separate evidence with a stable capability/check occurrence key. `high` confidence is available only to unambiguous knowledge-backed findings or deterministic tool observations; agent findings remain at `medium` or lower.
 
 Outcome selection: `completed` when every worklist item was evaluated (including an empty `findings` array); `no-knowledge` when no applicable rule survived filtering; `not-applicable` when the change touches no Copilot capability or `System.AI` surface; `partial` on a budget cutoff; `failed` on an unrecoverable error (`outcome-reason` required).
 
@@ -85,25 +83,27 @@ Output conforms to the DO output contract. A populated example:
   "skill": { "id": "al-copilot-capability-implementation", "version": 1 },
   "outcome": "completed",
   "summary": {
-    "counts": { "blocker": 1, "major": 1, "minor": 0, "info": 0 },
+    "counts": { "blocker": 0, "major": 0, "minor": 2, "info": 0 },
     "coverage": { "worklist-size": 6, "items-evaluated": 6 }
   },
   "findings": [
     {
       "id": "agent:aoai-key-not-secrettext",
-      "severity": "blocker",
+      "severity": "minor",
       "message": "The Azure OpenAI API key is held in a Text field, so it is exposed in the debugger and at risk of logging. Recommendation: change the field and accessor to SecretText and persist it via IsolatedStorage.",
       "location": { "file": "src/Copilot/MyCopilotSetup.Table.al", "line": 9 },
       "references": [],
-      "confidence": "high"
+      "confidence": "medium",
+      "domain": "Copilot Capability"
     },
     {
       "id": "agent:response-read-without-issuccess",
-      "severity": "major",
+      "severity": "minor",
       "message": "GetLastMessage() is read without first checking AOAIOperationResponse.IsSuccess(), so an error or empty completion is treated as valid output. Recommendation: branch on IsSuccess() and raise a friendly Error otherwise.",
       "location": { "file": "src/Copilot/GenerateJobProposal.Codeunit.al", "line": 44 },
       "references": [],
-      "confidence": "high"
+      "confidence": "medium",
+      "domain": "Copilot Capability"
     }
   ],
   "suppressed": []

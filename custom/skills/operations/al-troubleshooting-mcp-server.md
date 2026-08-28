@@ -7,7 +7,7 @@ description: Reviews how the Troubleshooting MCP Server is used to inspect the A
 inputs: [pr-diff, file-path]
 outputs: [findings-report]
 bc-version: [all]
-technologies: [al]
+technologies: [al, json]
 countries: [w1]
 application-area: [all]
 ---
@@ -27,7 +27,7 @@ The rule set is the Troubleshooting MCP Server usage guidance: when to use it ve
 Apply the frontmatter matching rules defined in READ against the task context:
 
 - `bc-version` - the targeted BC version; the server requires BC 28 (2026 release wave 1) or later, so a lower target is itself a relevance signal. Use `unknown` if unavailable.
-- `technologies` - `[al]`.
+- `technologies` - the intersection of `[al, json]` present in AL debug guidance and MCP envelopes.
 - `countries` - the configured context, else `unknown`.
 - `application-area` - `[all]`.
 
@@ -50,12 +50,12 @@ A rule enters the worklist when the change or file under review describes when, 
 
 For each worklist item, evaluate the change or file and emit findings (all are agent findings within this skill's domain: `references: []`, `id` prefixed `agent:`, `confidence` capped at `medium` per `skills/do.md`):
 
-- Guidance that will not work as written (instructing use on BC 26 or earlier, claiming the server can be used without an active paused debug session, asserting it replays history or applies fixes automatically) is a `major` agent finding (the agent-finding ceiling), with a self-contained `message` naming the false assumption and the correction.
+- Guidance defects inferred from text are agent findings capped at `minor` and `medium`. A direct MCP tool-envelope failure is separate deterministic evidence with a stable tool/operation occurrence key and may carry hard severity.
 - Guidance that misdescribes a tool or its output in a way that misleads (treating frame IDs as one-based, expecting Get Source Code to return source for compiled `.app` frames, omitting that Database Statistics is where hidden DB calls surface) is a `minor` agent finding.
 - A scoping or hygiene gap (recommending the MCP for interactive step-through or single-variable peeks where the regular debugger is better, omitting the explicit-phrasing tip where Copilot would otherwise not engage) is a `minor` agent finding.
-- When a rule is clearly applicable but no violation is detected, emit `info`.
+- Record satisfied tool checks in summary coverage; do not emit findings for them.
 
-Set `confidence` to `high` for an unambiguous textual claim that contradicts a documented limit (a stated BC 26 prerequisite, "applies the fix automatically"), `medium` for heuristic detection or when any frontmatter dimension was `unknown`. For a mechanical wording fix in the diff (correcting a version number, fixing a one-based frame claim), emit `suggested-code` with the literal replacement; otherwise set `suggested-code-omission-reason`. See `skills/do.md` for the full contract.
+Uncited textual-review findings use confidence `medium` or lower. A direct tool-envelope observation or knowledge-backed finding may use `high`. Emit `suggested-code` for mechanical wording fixes.
 
 Outcome selection: `completed` when every worklist item was evaluated (including an empty `findings` array); `no-knowledge` when no applicable rule survived Relevance and configuration filtering; `not-applicable` when the change references no Troubleshooting MCP or AL debug guidance; `partial` when a budget was hit before the worklist was exhausted; `failed` on an unrecoverable error (`outcome-reason` required).
 
@@ -68,17 +68,18 @@ Output conforms to the DO output contract. A populated example:
   "skill": { "id": "al-troubleshooting-mcp-server", "version": 1 },
   "outcome": "completed",
   "summary": {
-    "counts": { "blocker": 0, "major": 1, "minor": 1, "info": 0 },
+    "counts": { "blocker": 0, "major": 0, "minor": 2, "info": 0 },
     "coverage": { "worklist-size": 5, "items-evaluated": 5 }
   },
   "findings": [
     {
       "id": "agent:troubleshooting-mcp-wrong-bc-version",
-      "severity": "major",
+      "severity": "minor",
       "message": "The debugging guide tells developers to use the Troubleshooting MCP Server on BC 26. The server requires BC 28 (2026 release wave 1) or later and is unavailable on BC 26, so this instruction will not work. Recommendation: state the BC 28 minimum and point BC 26 users to the regular debugger.",
       "location": { "file": "docs/debugging/mcp-guide.md", "line": 14 },
       "references": [],
-      "confidence": "high",
+      "confidence": "medium",
+      "domain": "Troubleshooting MCP",
       "suggested-code": "Requires BC 2026 release wave 1 (BC 28) or later."
     },
     {
@@ -87,7 +88,8 @@ Output conforms to the DO output contract. A populated example:
       "message": "The guide treats an empty Get Source Code result as an error to retry. An empty result means the frame is in compiled .app code; the correct fallback is to inspect variables at that frame. Recommendation: document the compiled-frame case and the variable-inspection fallback.",
       "location": { "file": "docs/debugging/mcp-guide.md", "line": 33 },
       "references": [],
-      "confidence": "medium"
+      "confidence": "medium",
+      "domain": "Troubleshooting MCP"
     }
   ],
   "suppressed": []

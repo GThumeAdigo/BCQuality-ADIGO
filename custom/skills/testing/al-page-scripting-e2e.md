@@ -7,7 +7,7 @@ description: Reviews a Business Central Page Scripting (.yml) end-to-end test la
 inputs: [repository, file-path]
 outputs: [findings-report]
 bc-version: [all]
-technologies: [al]
+technologies: [yaml, powershell, al]
 countries: [w1]
 application-area: [all]
 ---
@@ -27,7 +27,7 @@ The rule set is the three-layer test model and the Page Scripting recording disc
 Apply the frontmatter matching rules defined in READ against the task context:
 
 - `bc-version` - the target BC version from the extension's `app.json`, or `unknown` if unavailable.
-- `technologies` - `[al]`.
+- `technologies` - the intersection of `[yaml, powershell, al]` present in the page-script artifact and replay harness.
 - `countries` - the countries declared in the app's `app.json`; default to the orchestrator's configured context, else `unknown`.
 - `application-area` - the union of application areas exercised by the recorded flows; pass the actual set, do not substitute `[all]`.
 
@@ -49,12 +49,11 @@ Narrow to the rules that apply to the recordings, plan, seed, and harness under 
 
 For each worklist item, evaluate the recordings, plan, seed, and harness and emit findings:
 
-- A Page Scripting recording that verifies something a layer-1 AL TestPage could assert (reading a record or a field after invoking a codeunit) is a `major` layering violation: it belongs in the cheaper, deterministic layer. A recording that depends on ambient data with no seeded, deterministically named fixture (or a create flow that does not reset the No. Series, so run 2 drifts to `-002`) is a `major` determinism defect.
-- A recording that relies on "click the first row" instead of filter-as-you-type to a single match, a missing `E2E-00 Clear and Seed.yml` head of batch, a recording whose `telemetryId`/`runtimeId`/targeting was altered from the capture (breaking replay correlation), or recordings placed where the harness path contains a space or requires a `..` traversal, is `major`.
+- Layering, ambient-data, seed, targeting, and harness-path defects found by source review are capped agent findings unless a curated rule applies. A direct replay-harness failure is separate deterministic evidence with a stable recording/assertion occurrence key and may gate according to its tool result.
 - A missing or out-of-order `E2E-NN` prefix, a recording covering more than one flow, or a Test Seed Factory not gated behind the `Allow Test Data Seed` DEV/UAT toggle, is `minor`.
-- When a rule is clearly applicable and the artifact follows it, emit `info`.
+- Record satisfied artifact checks in summary coverage; do not emit findings for them.
 
-Cite a `testing` knowledge file in `references` when one matches; otherwise emit an agent finding within this skill's domain (`references: []`, `id` prefixed `agent:`, severity capped at `minor` per `skills/do.md` for agent findings). Set `confidence` `high` for unambiguous matches (a literal "click first row", a missing seed head, an asserted record read), `medium` for heuristic or `unknown`-dimension cases. Provide `suggested-code` only for mechanical fixes (rename a file to add the `NN` prefix, quote a value); otherwise set `suggested-code-omission-reason`. A one-off exploratory drive of the UI (no durable artifact) belongs to the `al-bc-webclient-runner` agent, and subjective or mobile-only checks belong to the manual checklist, so neither is flagged here. See `skills/do.md` for the full contract.
+Cite a `testing` knowledge file in `references` when one matches; otherwise emit an agent finding within this skill's domain (`references: []`, `id` prefixed `agent:`, severity capped at `minor` and confidence capped at `medium`). A replay harness or platform runner failure may be emitted as separate deterministic evidence with a stable recording/assertion occurrence key only when its named tool directly reports the failure. Provide `suggested-code` only for mechanical fixes. A one-off exploratory drive of the UI belongs to `al-bc-webclient-runner`.
 
 Outcome selection: `completed` when every worklist item was evaluated; `no-knowledge` when no applicable rule survived filtering; `not-applicable` when the task context has no Page Scripting layer to review; `partial` on a budget cutoff; `failed` on an unrecoverable error (`outcome-reason` required).
 
@@ -67,25 +66,27 @@ Output conforms to the DO output contract. A populated example:
   "skill": { "id": "page-scripting-e2e", "version": 1 },
   "outcome": "completed",
   "summary": {
-    "counts": { "blocker": 0, "major": 2, "minor": 0, "info": 0 },
+    "counts": { "blocker": 0, "major": 0, "minor": 2, "info": 0 },
     "coverage": { "worklist-size": 6, "items-evaluated": 6 }
   },
   "findings": [
     {
       "id": "agent:e2e-wrong-layer",
-      "severity": "major",
+      "severity": "minor",
       "message": "Recording 'E2E-03 Posted entry amount.yml' asserts a posted ledger entry amount, which an AL TestPage can verify by reading the record after posting. This belongs in layer 1 (al-userguide-test-writer), not Page Scripting. Recommendation: move the assertion to the AL TestPage suite and keep only the rendered-UI residue here.",
       "location": { "file": "Page Scripting/E2E-03 Posted entry amount.yml" },
       "references": [],
-      "confidence": "high"
+      "confidence": "medium",
+      "domain": "Page Scripting E2E"
     },
     {
       "id": "agent:e2e-nondeterministic-seed",
-      "severity": "major",
+      "severity": "minor",
       "message": "Recording 'E2E-02 New movement.yml' creates a record but the No. Series is not reset to a test series during seed, so a second run yields FE2E-MOV-002 and the recorded assertion on FE2E-MOV-001 drifts. Recommendation: repoint the No. Series to a freshly reset FE2E- series in the Test Seed Factory and restore it on clear.",
       "location": { "file": "Page Scripting/E2E-02 New movement.yml" },
       "references": [],
-      "confidence": "medium"
+      "confidence": "medium",
+      "domain": "Page Scripting E2E"
     }
   ],
   "suppressed": []

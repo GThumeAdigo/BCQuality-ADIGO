@@ -7,7 +7,7 @@ description: Reviews a Business Central SaaS point-in-time restore plan against 
 inputs: [repository]
 outputs: [findings-report]
 bc-version: [all]
-technologies: [al]
+technologies: [powershell, json]
 countries: [w1]
 application-area: [all]
 ---
@@ -27,7 +27,7 @@ The rule set is the BC SaaS point-in-time restore runbook: the platform's hard l
 Apply the frontmatter matching rules defined in READ against the task context:
 
 - `bc-version` - the target environment's BC version, or `unknown` if unavailable.
-- `technologies` - `[al]`.
+- `technologies` - the intersection of `[powershell, json]` present in restore automation and environment records.
 - `countries` - the customer's localisation context, else `unknown`; relevant because a localisation change during restore is not allowed.
 - `application-area` - `[all]`.
 
@@ -50,13 +50,12 @@ A rule enters the worklist when the plan, runbook, or checklist under review tou
 
 For each worklist item, evaluate the plan and emit findings (all are agent findings within this skill's domain: `references: []`, `id` prefixed `agent:`, `confidence` capped at `medium` per `skills/do.md`):
 
-- A plan that violates a hard limit (a restore point older than 28 days, a cross-region target, a Sandbox-to-Production path, a localisation change, or an 11th restore in the month) is a `major` agent finding (the agent-finding ceiling), with a self-contained `message` naming the limit and the consequence. These are stop-the-line conditions for the operator even though the agent severity is capped.
-- A missing prerequisite (operator lacks `D365 BACKUP/RESTORE`, a trial subscription, no target environment) or a skipped post-restore reconnection that leaves an integration firing on stale data or silently off is a `major` agent finding.
+- Plan defects inferred from runbook text are agent findings capped at `minor` and `medium`. A direct Admin Center or platform-validator rejection is separate deterministic evidence with a stable environment/restore-check occurrence key and may carry hard severity.
 - A pre-restore omission that risks recoverability or cleanup (Job Queues left running on the source, no `-DONOTUSE` rename before name reuse, no installed-app snapshot, sensitive data not access-restricted) is a `minor` agent finding.
 - A communication or hygiene gap (no downtime estimate to the customer, no smoke-test plan, no post-restore confirmation before deleting `-DONOTUSE`) is a `minor` agent finding.
-- When a rule is clearly applicable but no violation is detected, emit `info`.
+- Record satisfied runbook checks in summary coverage; do not emit findings for them.
 
-Set `confidence` to `high` when the plan states a concrete value that breaches a limit (a dated restore point, a named cross-region target), `medium` for heuristic detection or when any frontmatter dimension was `unknown`. Restore-plan findings are rarely mechanical; provide `suggested-code` only when the fix is a literal edit to a checked-in artifact, otherwise set `suggested-code-omission-reason`. See `skills/do.md` for the full contract.
+Uncited runbook-review findings use confidence `medium` or lower. Direct platform-validator evidence or knowledge-backed findings may use `high`. Provide `suggested-code` only for literal checked-in artifact edits.
 
 Outcome selection: `completed` when every worklist item was evaluated (including an empty `findings` array); `no-knowledge` when no applicable rule survived Relevance and configuration filtering; `not-applicable` when the task context describes no restore plan, runbook, or checklist; `partial` when a budget was hit before the worklist was exhausted; `failed` on an unrecoverable error (`outcome-reason` required).
 
@@ -69,17 +68,18 @@ Output conforms to the DO output contract. A populated example:
   "skill": { "id": "al-saas-restore-runbook", "version": 1 },
   "outcome": "completed",
   "summary": {
-    "counts": { "blocker": 0, "major": 1, "minor": 1, "info": 0 },
+    "counts": { "blocker": 0, "major": 0, "minor": 2, "info": 0 },
     "coverage": { "worklist-size": 6, "items-evaluated": 6 }
   },
   "findings": [
     {
       "id": "agent:restore-point-outside-retention-window",
-      "severity": "major",
+      "severity": "minor",
       "message": "The plan targets a restore point 35 days before today, but BC SaaS retains backups for only 28 days. This restore cannot be performed as specified. Recommendation: pick the earliest available point within the 28-day window and confirm with the customer that data before it is unrecoverable from backup.",
       "location": { "file": "docs/incidents/restore-plan.md", "line": 12 },
       "references": [],
-      "confidence": "high"
+      "confidence": "medium",
+      "domain": "SaaS Restore"
     },
     {
       "id": "agent:disabled-integrations-not-in-post-restore-plan",
@@ -87,7 +87,8 @@ Output conforms to the DO output contract. A populated example:
       "message": "The post-restore checklist does not re-enable the integrations that BC disables on restore (Document Exchange, Currency Exchange Rates, VAT validation, Graph Mail, CRM/CDS, webhooks). Leaving them unaddressed means they stay off silently. Recommendation: add a step to re-enable and test each integration one by one before notifying the customer.",
       "location": { "file": "docs/incidents/restore-plan.md", "line": 40 },
       "references": [],
-      "confidence": "medium"
+      "confidence": "medium",
+      "domain": "SaaS Restore"
     }
   ],
   "suppressed": []

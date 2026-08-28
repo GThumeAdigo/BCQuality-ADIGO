@@ -48,7 +48,7 @@ Narrow to the rules that apply to the change under review. A rule enters the wor
 
 For each worklist item, evaluate the AL and emit findings. Reframe the correct-integration rules as defects to flag:
 
-- **Unguarded interactive UI on a path an agent can hit.** A `Confirm`, `Message`, `Page.RunModal`, or other blocking dialog reachable from an agent session hangs or fails the task. Flag `major` and recommend gating it behind an `IsAgentSession` check:
+- **Unguarded interactive UI on a path an agent can hit.** Emit a capped agent finding unless curated knowledge applies, and recommend an `IsAgentSession` guard:
 
   ```al
   local procedure IsCustomAgentRunningThis(): Boolean
@@ -61,12 +61,12 @@ For each worklist item, evaluate the AL and emit findings. Reframe the correct-i
   ```
 
 - **Enumerating agents without `FindSet` discipline.** A `GetCustomAgents` call whose result is read without a proper `if TempAgentInfo.FindSet() then repeat ... until ... Next() = 0` loop is a `minor` correctness defect.
-- **Wrong metadata provider filter.** Detecting agent context with a provider other than `::"Custom Agent"` (when the agent is a custom agent) yields false negatives. Flag `major`.
+- **Wrong metadata provider filter.** Emit a capped agent finding unless direct platform validation reports the failure.
 - **Admin-only intent not enforced.** When the design intends admin-only creation but `ShowCanCreateAgent` does not gate on `CurrentUserHasCanManageAllAgentsPermission()`, any user can create the agent on BC 28.1+. Flag `minor` and name the `bc-version` dimension.
 - **Instruction changes with no versioning or tests.** An instruction-text change that is not versioned, not run against the evaluation suite, or lands with no before/after transcripts in the PR is a `minor` process finding. Treat agent instructions like code.
-- **Hand-rolled task orchestration.** Creating or running agent tasks by bypassing the Tasks AL API is a `major` finding: it diverges from the supported runtime.
+- **Hand-rolled task orchestration.** Emit a capped agent finding unless curated knowledge applies.
 
-Cite a `security` or `style` knowledge file in `references` when a finding maps onto one (for example an interactive confirm that the style domain already prohibits in non-interactive paths); otherwise emit an agent finding within this skill's domain (`references: []`, `id` prefixed `agent:`, severity capped per `skills/do.md`). Set `confidence` to `high` for unambiguous API or identifier matches, `medium` for heuristic detections or when any frontmatter dimension was `unknown`, and `low` for applicability-only advisories. For mechanical fixes (add the `IsAgentSession` guard, correct the metadata-provider value), emit `findings[].suggested-code`; otherwise set `suggested-code-omission-reason`. See `skills/do.md` for the full contract.
+Cite a `security` or `style` knowledge file when one maps; otherwise emit a capped agent finding. A direct platform failure is separate evidence with a stable toolkit-operation/check occurrence key. `high` confidence is available only to unambiguous knowledge-backed findings or deterministic tool observations; agent findings remain at `medium` or lower.
 
 Outcome selection: `completed` when every worklist item was evaluated (including an empty `findings` array); `no-knowledge` when no applicable rule survived filtering; `not-applicable` when the change touches no toolkit or Tasks AL API surface; `partial` on a budget cutoff; `failed` on an unrecoverable error (`outcome-reason` required).
 
@@ -79,17 +79,18 @@ Output conforms to the DO output contract. A populated example:
   "skill": { "id": "al-ai-development-toolkit", "version": 1 },
   "outcome": "completed",
   "summary": {
-    "counts": { "blocker": 0, "major": 1, "minor": 1, "info": 0 },
+    "counts": { "blocker": 0, "major": 0, "minor": 2, "info": 0 },
     "coverage": { "worklist-size": 6, "items-evaluated": 6 }
   },
   "findings": [
     {
       "id": "agent:interactive-confirm-in-agent-path",
-      "severity": "major",
+      "severity": "minor",
       "message": "A Confirm dialog is reachable from a code path that runs under a custom agent session, where there is no user to answer it. Recommendation: gate the confirm behind Agent Session.IsAgentSession(AgentMetadataProvider::\"Custom Agent\") and default to the non-interactive branch when true.",
       "location": { "file": "src/Sales/OrderPosting.Codeunit.al", "line": 73 },
       "references": [],
-      "confidence": "high"
+      "confidence": "medium",
+      "domain": "AI Development Toolkit"
     },
     {
       "id": "agent:agent-enumeration-no-findset",
@@ -97,7 +98,8 @@ Output conforms to the DO output contract. A populated example:
       "message": "GetCustomAgents populates a temporary record that is then read without a FindSet/repeat loop, so only the first or no agent is processed. Recommendation: iterate with if TempAgentInfo.FindSet() then repeat ... until TempAgentInfo.Next() = 0.",
       "location": { "file": "src/Agent/AgentList.Codeunit.al", "line": 22 },
       "references": [],
-      "confidence": "medium"
+      "confidence": "medium",
+      "domain": "AI Development Toolkit"
     }
   ],
   "suppressed": []

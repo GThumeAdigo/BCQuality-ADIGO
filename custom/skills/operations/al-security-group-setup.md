@@ -7,7 +7,7 @@ description: Reviews how a Business Central environment is restricted with a Mic
 inputs: [repository]
 outputs: [findings-report]
 bc-version: [all]
-technologies: [al]
+technologies: [powershell, json]
 countries: [w1]
 application-area: [all]
 ---
@@ -27,7 +27,7 @@ The rule set is the BC Entra security-group setup procedure: group creation conv
 Apply the frontmatter matching rules defined in READ against the task context:
 
 - `bc-version` - the environment's BC version, or `unknown` if unavailable.
-- `technologies` - `[al]`.
+- `technologies` - the intersection of `[powershell, json]` present in group/environment configuration and verification scripts.
 - `countries` - the configured context, else `unknown`.
 - `application-area` - `[all]`.
 
@@ -50,12 +50,12 @@ A rule enters the worklist when the artifact under review describes an environme
 
 For each worklist item, evaluate the configuration and emit findings (all are agent findings within this skill's domain: `references: []`, `id` prefixed `agent:`, `confidence` capped at `medium` per `skills/do.md`):
 
-- A Production or explicitly sensitive environment with no Entra security-group restriction, leaving every licensed internal user able to sign in, is a `major` agent finding (the agent-finding ceiling), with a self-contained `message` naming the environment and the remediation (create a per-environment group and bind it via the Admin Center).
+- A missing restriction inferred from configuration is an agent finding capped at `minor` and `medium`. A direct Entra or Admin Center validator failure is separate deterministic evidence with a stable environment/check occurrence key and may carry hard severity.
 - A binding that defeats the control or its auditability (a single-owner group, a Production group reused for UAT, users added directly to BC instead of through the group) is a `minor` agent finding.
 - An operational or hygiene gap (no documented quarterly membership review, no Conditional Access on a sensitive group, no documented owner contact, no verification that a non-member is actually denied) is a `minor` agent finding.
-- When a rule is clearly applicable but no violation is detected, emit `info`.
+- Record satisfied configuration checks in summary coverage; do not emit findings for them.
 
-Set `confidence` to `high` when the artifact states a concrete fact that breaches a rule (a named Production environment documented as unrestricted, a group with one owner), `medium` for heuristic detection or when any frontmatter dimension was `unknown`. These findings are rarely mechanical; provide `suggested-code` only when the fix is a literal edit to a checked-in artifact, otherwise set `suggested-code-omission-reason`. See `skills/do.md` for the full contract.
+Uncited configuration-review findings use confidence `medium` or lower. Direct platform-validator evidence or knowledge-backed findings may use `high`. Provide `suggested-code` only for literal checked-in artifact edits.
 
 Outcome selection: `completed` when every worklist item was evaluated (including an empty `findings` array); `no-knowledge` when no applicable rule survived Relevance and configuration filtering; `not-applicable` when the task context describes no environment binding or group to review; `partial` when a budget was hit before the worklist was exhausted; `failed` on an unrecoverable error (`outcome-reason` required).
 
@@ -68,17 +68,18 @@ Output conforms to the DO output contract. A populated example:
   "skill": { "id": "al-security-group-setup", "version": 1 },
   "outcome": "completed",
   "summary": {
-    "counts": { "blocker": 0, "major": 1, "minor": 1, "info": 0 },
+    "counts": { "blocker": 0, "major": 0, "minor": 2, "info": 0 },
     "coverage": { "worklist-size": 6, "items-evaluated": 6 }
   },
   "findings": [
     {
       "id": "agent:production-environment-not-restricted",
-      "severity": "major",
+      "severity": "minor",
       "message": "The Production environment 'acme-prod' is documented with no Entra security group bound, so every user holding a BC licence in the tenant can sign in. Recommendation: create a Security group named acme-bc-prod-access with at least two owners, add the intended members, and bind it via BC Admin Center > Security Group > Define.",
       "location": { "file": "docs/environments/acme.md", "line": 18 },
       "references": [],
-      "confidence": "high"
+      "confidence": "medium",
+      "domain": "Security Group Setup"
     },
     {
       "id": "agent:security-group-single-owner",
@@ -86,7 +87,8 @@ Output conforms to the DO output contract. A populated example:
       "message": "The acme-bc-uat-access group lists a single owner. A single owner is a continuity risk for access management. Recommendation: add at least one more owner so the group can always be administered.",
       "location": { "file": "docs/environments/acme.md", "line": 27 },
       "references": [],
-      "confidence": "medium"
+      "confidence": "medium",
+      "domain": "Security Group Setup"
     }
   ],
   "suppressed": []

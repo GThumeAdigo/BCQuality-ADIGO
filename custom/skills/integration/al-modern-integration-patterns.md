@@ -20,7 +20,7 @@ An orchestrator invokes this skill with either a `pr-diff` (the standard PR-revi
 
 ## Source
 
-The rule set is the modern-integration house rules below, plus the `integration` knowledge domain in BCQuality where a deck anti-pattern maps onto a curated rule. Read the BCQuality knowledge index once and take the `integration` domain entries (and the `performance` and `security` entries named in the overlap table) as the citable candidate set across every enabled layer; do not open an article's body until it enters the Worklist. The house rules the corpus does not vendor are emitted as `house:<slug>` with empty `references[]`. See `al-bcquality-integration` for the citation contract.
+The rule set is the modern-integration checks below, plus the `integration` knowledge domain where a deck anti-pattern maps onto a curated rule. Read the BCQuality knowledge index once and take the `integration` domain entries (and the `performance` and `security` entries named in the overlap table) as the citable candidate set across every enabled layer; do not open an article's body until it enters the Worklist. Checks the corpus does not vendor are emitted as capped `agent:<slug>` findings. See `al-bcquality-integration` for the citation contract.
 
 ## Relevance
 
@@ -62,7 +62,7 @@ A rule enters the worklist when the diff touches the arrow or field it governs: 
 
 ## Action
 
-For each worklist item, evaluate the change and emit findings. The slugs below are emitted as `house:<slug>` with empty `references[]`; where a deck anti-pattern maps onto a vendored BCQuality rule (see the overlap table) cite that file in `references` instead. Each rule is hard unless marked otherwise: a clear violation of a hard rule is a `blocker`, a contradiction of a softer recommendation is `major`, and a hygiene gap is `minor`. When a rule is clearly applicable but no violation is found, emit `info`.
+For each worklist item, evaluate the change and emit findings. Where a deck anti-pattern maps onto a vendored BCQuality rule, cite that file. Otherwise emit an `agent:<slug>` finding capped at `minor` severity and `medium` confidence. Only a direct named tool or platform failure may use separate deterministic evidence with a stable flow/check occurrence key and hard severity. Satisfied rules contribute to summary coverage and never produce findings.
 
 ### Staging
 
@@ -143,7 +143,7 @@ Some deck anti-patterns map onto vendored BCQuality rules. When they do, cite th
 | Multi-step flow, short locks | IIntegrationStage plus per-stage Job Queue | Short locks. Targeted retry. Per-stage rollback. |
 | Humans fix payloads | Resolution page on Integration Message | Same shape as E-Document. Audit trail kept. |
 
-Set `confidence` to `high` for unambiguous pattern matches (a literal `HttpClient.Send` in a posting subscriber, a `[BusinessEvent]` where an external subscriber is intended, a `Sleep`-poll loop in an API handler), `medium` for heuristic detections or when any frontmatter dimension was `unknown`, and `low` for applicability-only advisories. Provide `suggested-code` only for mechanical, local fixes (add the `Idempotency-Key` header, rename `[BusinessEvent]` to `[ExternalBusinessEvent]`, remove an `ODataKeyFields` line); otherwise set `suggested-code-omission-reason`. See `skills/do.md` for the full contract, and `al-code-review` for the general AL house rules.
+Use `high` confidence only for unambiguous knowledge-backed findings or deterministic tool observations. Uncited pattern findings remain at `medium` or lower. Provide `suggested-code` only for mechanical, local fixes; otherwise set `suggested-code-omission-reason`.
 
 Outcome selection: `completed` when every worklist item was evaluated (including an empty `findings` array); `no-knowledge` when no applicable rule survived Source, Relevance, and configuration filtering; `not-applicable` when the change touches no integration code on any of the four arrows; `partial` when a budget was hit before the worklist was exhausted; `failed` on an unrecoverable error (`outcome-reason` required).
 
@@ -156,13 +156,13 @@ Output conforms to the DO output contract. A populated example:
   "skill": { "id": "modern-integration-patterns", "version": 1 },
   "outcome": "completed",
   "summary": {
-    "counts": { "blocker": 1, "major": 1, "minor": 0, "info": 0 },
+    "counts": { "blocker": 0, "major": 0, "minor": 2, "info": 0 },
     "coverage": { "worklist-size": 5, "items-evaluated": 5 }
   },
   "findings": [
     {
-      "id": "house:no-callout-from-posting",
-      "severity": "blocker",
+      "id": "agent:no-callout-from-posting",
+      "severity": "minor",
       "message": "An HttpClient.Send call to the WMS is made inside an OnAfterPostSalesDoc subscriber, holding the document locks across the external call. Recommendation: stage the work to the Integration Message and let the Job Queue send it after commit.",
       "location": {
         "file": "src/Integration/ShipmentNotifier.Codeunit.al",
@@ -170,15 +170,17 @@ Output conforms to the DO output contract. A populated example:
         "range": { "start-line": 58, "end-line": 64 }
       },
       "references": [],
-      "confidence": "high"
+      "confidence": "medium",
+      "domain": "Modern Integration Patterns"
     },
     {
-      "id": "house:outbound-idempotency-key",
-      "severity": "major",
+      "id": "agent:outbound-idempotency-key",
+      "severity": "minor",
       "message": "The outbound POST to the payment provider does not set an Idempotency-Key header, so a retry can charge twice. Recommendation: set Idempotency-Key to the Integration Message GUID and reuse it on every retry.",
       "location": { "file": "src/Integration/PaymentSender.Codeunit.al", "line": 91 },
       "references": [],
-      "confidence": "high"
+      "confidence": "medium",
+      "domain": "Modern Integration Patterns"
     }
   ],
   "suppressed": []

@@ -7,7 +7,7 @@ description: Audits AL data paths for cross-tenant and cross-company leak risk i
 inputs: [pr-diff, file-path, repository]
 outputs: [findings-report]
 bc-version: [all]
-technologies: [al]
+technologies: [al, csharp, typescript]
 countries: [w1]
 application-area: [all]
 ---
@@ -27,7 +27,7 @@ Read the BCQuality knowledge index once (the `knowledge-index.json` Entry's prep
 Apply the frontmatter matching rules defined in READ against the task context:
 
 - `bc-version`: the target BC version from the branch `app.json`, or `unknown` if unavailable.
-- `technologies`: `[al]`.
+- `technologies`: the intersection of `[al, csharp, typescript]` present in BC and companion API paths.
 - `countries`: the consuming app's declared countries, or `unknown`.
 - `application-area`: the application areas of the changed objects, or `unknown`.
 
@@ -38,16 +38,18 @@ Discard files that are not applicable. Retain conditionally applicable files (an
 Narrow to the code paths where tenant or company scope is established or relied upon:
 
 - Codeunits runnable as a Job Queue entry (`TableNo = "Job Queue Entry"`) and any `[ServiceEnabled]` web-service codeunit.
+- Scheduled tasks and Job Queue dispatchers, including how the target company is selected before the task/session starts and whether a blank or stale company can silently fall back.
 - Procedures that call `CompanyName()`, `Company.Get`, set a `Company` filter, or resolve a record by `SystemId` across companies.
 - Reads or writes to tables classified `CustomerContent` or `OrganizationIdentifiableInformation`, especially without a company filter.
 - Outbound `HttpClient` calls to a companion API and any sibling API endpoints (`Endpoints/*.cs`, `routes/*.ts`) in the same repo.
+- Companion APIs that construct a `DbContext`: verify authenticated tenant context is resolved, validated, and applied before the context or tenant-scoped query is created.
 - `Session.LogMessage` / Application Insights calls that omit a tenant custom dimension.
 
 A curated knowledge file enters the worklist when its `keywords` intersect these tokens. Read its full `## Best Practice` / `## Anti Pattern` body only after it makes the worklist. Resolve layer-precedence conflicts per READ and record dropped files in `suppressed`.
 
 ## Action
 
-For each worklisted code path, check that tenant and company scope is established before data is resolved, that production paths never fall back to a default tenant, that cross-company writeback verifies the caller's company on both sides, that a company filter is present on every `CustomerContent` query, that `SystemId` resolution is company-scoped for per-company tables, that outbound calls carry tenant context the receiver validates, that any `Session.Companies` traversal is intentional and commented, and that logs carry the tenant id.
+For each worklisted code path, check that tenant and company scope is established before data is resolved, scheduled, or enqueued; that Scheduled Task and Job Queue entry points select and validate the intended company before opening records; that production paths never fall back to a default tenant; that cross-company writeback verifies the caller's company on both sides; that a company filter is present on every `CustomerContent` query; that `SystemId` resolution is company-scoped for per-company tables; that outbound calls carry tenant context the receiver validates; that a companion API establishes authenticated tenant context before constructing its `DbContext`; that any `Session.Companies` traversal is intentional; and that logs carry the tenant id.
 
 When a defect matches a curated `security` or `integration` knowledge file, emit a knowledge-backed finding citing that file: `severity` up to `blocker` only when the file states a platform-level guarantee, otherwise `major`; `id` equal to the file path; `confidence` `high` for an unambiguous match. When no curated file covers a concrete, demonstrable tenant-scoping defect, emit an agent finding within this skill's domain: `references: []`, `id` slug prefixed `agent:`, `confidence` capped at `medium`, `severity` capped at `minor`, and a self-contained `message` describing the leak path and a concrete fix (for example, "filter the pull query by the caller's company id"). Hold every agent candidate to the precision bar in `skills/do.md`: steelman that the cross-company traversal is intentional before emitting, and omit when in doubt. Set `domain` to `Multi-tenancy` on every finding. Set `suggested-code` when the fix is mechanical (adding a missing `SetRange(Company, ...)` or a company-id query parameter); otherwise set `suggested-code-omission-reason`. Do not emit findings for satisfied rules; compliant worklist items contribute only to coverage.
 

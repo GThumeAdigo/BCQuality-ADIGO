@@ -7,7 +7,7 @@ description: Reviews a Business Central product MCP server configuration for the
 inputs: [repository, file-path]
 outputs: [findings-report]
 bc-version: [all]
-technologies: [al]
+technologies: [al, json]
 countries: [w1]
 application-area: [all]
 ---
@@ -27,7 +27,7 @@ The rule set is this skill's own product-MCP configuration guidance, plus the `s
 Apply the frontmatter matching rules defined in READ against the task context:
 
 - `bc-version` - the BC version of the environment the configuration targets, or `unknown`. The product MCP server is BC online (SaaS) only; an on-prem target is `not-applicable`.
-- `technologies` - `[al]`; the exposed surface is BC API pages.
+- `technologies` - the intersection of `[al, json]` present in BC API pages and exported MCP configuration.
 - `countries` - from the environment's app context, else `unknown`.
 - `application-area` - the areas covered by the exposed API pages; pass the actual set, do not substitute `[all]`.
 
@@ -59,7 +59,7 @@ For each worklist item, evaluate the configuration and emit findings. Cite a `se
 
 ### Per-tool permissions and the write gate
 
-The default for a newly-added page is read-only. Enabling write requires `Unblock Edit Tools` on at the configuration level AND the specific permission ticked per page. Flag a configuration that opens Create/Modify/Delete on an entity whose agent workflow does not require it as a `major` over-exposure; flag write on a sensitive master or setup entity (vendors, payment setup, permissions) without a documented need as a `blocker`.
+The default for a newly-added page is read-only. Enabling write requires both configuration-level and per-page permission. Source-review over-exposure is a capped agent finding unless a curated security rule applies; a direct product validator rejection is separate evidence with a stable configuration/page/check occurrence key.
 
 ### Tool naming and the 70-tool cap
 
@@ -81,7 +81,7 @@ bc_actions_describe      # get the schema for a specific action
 bc_actions_invoke        # call it with parameters
 ```
 
-A configuration that exceeds (or will exceed) 70 static tools without Dynamic Tool Mode is a `major`: Copilot Studio caps at 70 and silently drops the overflow.
+A static-tool-cap concern inferred from configuration is a capped agent finding; a direct product/platform validator report is separate evidence with a stable configuration/check occurrence key.
 
 ### Page eligibility
 
@@ -89,7 +89,7 @@ API pages of subtype `ListPart` or `CardPart` are not supported, and only top-le
 
 ### Connection string and authentication
 
-The connection string from `Advanced > Connection String` carries `TenantId`, `EnvironmentName`, `Company`, and an optional `ConfigurationName`. Authentication is OAuth 2.0 Authorization Code with PKCE against Entra ID; Microsoft clients (VS Code, Copilot Studio) use a pre-registered application, while non-Microsoft clients (Claude, ChatGPT, custom) must register their own Entra application. All operations run as the signed-in user's identity, so the audit trail shows who did what. Flag a checked-in connection string or exported configuration that embeds a secret, or any reliance on a shared service-account identity that defeats per-user audit, as a `blocker`. See `al-rbac-and-access` for the Entra app-registration patterns when wiring non-Microsoft clients.
+Connection/authentication defects inferred from configuration are capped agent findings unless curated security knowledge applies. Direct Entra or product-validator failures are separate evidence with a stable configuration/auth-check occurrence key. See `al-rbac-and-access` for non-Microsoft client wiring.
 
 ### Recommended defaults (flag deviations)
 
@@ -98,7 +98,7 @@ The connection string from `Advanced > Connection String` carries `TenantId`, `E
 - Turn on Dynamic Tool Mode for any configuration exceeding 20 APIs, to future-proof against the 70-tool cap.
 - Each configuration documents its audience and intended use.
 
-Set `confidence` to `high` for unambiguous switch/permission matches in the exported JSON, `medium` for heuristic detections or when any frontmatter dimension was `unknown`, and `low` for applicability-only advisories. Provide `suggested-code` only for mechanical, local JSON edits (flip a write permission off, set a header); otherwise set `suggested-code-omission-reason`. See `skills/do.md` for the full contract. For the developer-tool MCP, see `al-mcp-server`; for in-product Copilot UX, see `al-copilot-promptdialog`.
+Use `high` confidence only for unambiguous knowledge-backed findings or deterministic platform/tool observations. Every evidence finding is separate and uses a stable configuration/page/check occurrence key. Uncited configuration findings remain at `medium` or lower.
 
 Outcome selection: `completed` when every worklist item was evaluated (including an empty `findings` array); `no-knowledge` when no applicable rule survived Source, Relevance, and configuration filtering; `not-applicable` when the target is on-prem or no MCP configuration is present; `partial` when a budget was hit before the worklist was exhausted; `failed` on an unrecoverable error (`outcome-reason` required).
 
@@ -111,25 +111,27 @@ Output conforms to the DO output contract. A populated example:
   "skill": { "id": "al-bc-mcp-server-data", "version": 1 },
   "outcome": "completed",
   "summary": {
-    "counts": { "blocker": 1, "major": 1, "minor": 0, "info": 0 },
+    "counts": { "blocker": 0, "major": 0, "minor": 2, "info": 0 },
     "coverage": { "worklist-size": 6, "items-evaluated": 6 }
   },
   "findings": [
     {
       "id": "agent:mcp-write-on-sensitive-entity-without-justification",
-      "severity": "blocker",
+      "severity": "minor",
       "message": "The exported MCP configuration enables Allow Modify and Allow Delete on the Payment Method API page with Unblock Edit Tools on, and no documented agent workflow requires write access to payment setup. Recommendation: set this entity back to read-only and open write only for the specific entity a documented workflow needs.",
       "location": { "file": "mcp/WarehouseAgentConfig.json", "line": 34 },
       "references": [],
-      "confidence": "high"
+      "confidence": "medium",
+      "domain": "BC MCP Data Surface"
     },
     {
       "id": "agent:mcp-exceeds-static-tool-cap",
-      "severity": "major",
+      "severity": "minor",
       "message": "The configuration exposes 31 API pages with Dynamic Tool Mode off, generating more than 70 static tools, so Copilot Studio will silently drop the overflow. Recommendation: turn on Dynamic Tool Mode to expose the three meta-tools instead.",
       "location": { "file": "mcp/SalesTeamConfig.json", "line": 4 },
       "references": [],
-      "confidence": "high"
+      "confidence": "medium",
+      "domain": "BC MCP Data Surface"
     }
   ],
   "suppressed": []

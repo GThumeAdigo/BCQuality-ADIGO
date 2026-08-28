@@ -7,7 +7,7 @@ description: Reviews Azure role-based access control configuration against the l
 inputs: [repository, file-path]
 outputs: [findings-report]
 bc-version: [all]
-technologies: [powershell]
+technologies: [powershell, bicep, json]
 countries: [w1]
 application-area: [all]
 ---
@@ -27,7 +27,7 @@ The rule set is the team's Azure RBAC and access model. BCQuality's curated know
 Apply the frontmatter matching rules defined in READ against the task context:
 
 - `bc-version` - not meaningful for an Azure access review; treat as `[all]`.
-- `technologies` - `[powershell]`; the artifacts under review are RBAC scripts, identity wiring, and infrastructure definitions.
+- `technologies` - the intersection of `[powershell, bicep, json]` present in RBAC scripts, ARM exports, and infrastructure definitions.
 - `countries` - the configured context, else `unknown`.
 - `application-area` - `[all]`.
 
@@ -50,12 +50,12 @@ A rule enters the worklist when the artifact under review declares, modifies, or
 
 For each worklist item, evaluate the configuration and emit findings (all are agent findings within this skill's domain: `references: []`, `id` prefixed `agent:`, `confidence` capped at `medium` per `skills/do.md`):
 
-- A standing security exposure (Owner granted at RG or subscription level with no delegation need; a connection string or secret embedded in code instead of an MI; Key Vault created with the legacy access-policy model; a persistent elevated assignment that should be PIM-eligible) is a `major` agent finding (the agent-finding severity ceiling), with a self-contained `message` describing the exposure and the concrete remediation (drop Owner to Contributor; move the secret to Key Vault and read via MI; switch the permission model to RBAC; convert to a PIM-eligible assignment).
+- A standing security exposure inferred from IaC is an agent finding capped at `minor` and `medium` unless curated knowledge applies. A direct Azure policy or deployment-validator failure is separate deterministic evidence with a stable resource/policy occurrence key and may carry hard severity.
 - A least-privilege or scoping drift that is real but lower-risk (a single-resource assignment that belongs in its own RG; a custom role where a built-in fits; Reader granted at Key Vault expecting secret access; a personal RG assignment that should flow through an Entra group) is a `minor` agent finding.
 - A hygiene gap (no documented quarterly review, an undocumented Owner holder, a lingering short-lived assignment past its deadline) is a `minor` agent finding.
-- When a rule is clearly applicable but no violation is detected, emit `info`.
+- Record satisfied access checks in summary coverage; do not emit findings for them.
 
-Set `confidence` to `high` for an unambiguous match in declarative IaC or a role-assignment command, `medium` for heuristic detection or when any frontmatter dimension was `unknown`. Provide `suggested-code` only for a mechanical, local edit to a checked-in artifact (changing a role token in a Bicep assignment, flipping a Key Vault `enableRbacAuthorization` flag); otherwise set `suggested-code-omission-reason`. See `skills/do.md` for the full contract.
+Uncited IaC review findings use confidence `medium` or lower. Direct Azure validator evidence or knowledge-backed findings may use `high`. Provide `suggested-code` only for mechanical local edits.
 
 Outcome selection: `completed` when every worklist item was evaluated (including an empty `findings` array); `no-knowledge` when no applicable rule survived Relevance and configuration filtering; `not-applicable` when the task context declares no Azure role assignment, identity, or Key Vault config to review; `partial` when a budget was hit before the worklist was exhausted; `failed` on an unrecoverable error (`outcome-reason` required).
 
@@ -68,17 +68,18 @@ Output conforms to the DO output contract. A populated example:
   "skill": { "id": "al-rbac-and-access", "version": 1 },
   "outcome": "completed",
   "summary": {
-    "counts": { "blocker": 0, "major": 1, "minor": 1, "info": 0 },
+    "counts": { "blocker": 0, "major": 0, "minor": 2, "info": 0 },
     "coverage": { "worklist-size": 6, "items-evaluated": 6 }
   },
   "findings": [
     {
       "id": "agent:owner-granted-without-delegation-need",
-      "severity": "major",
+      "severity": "minor",
       "message": "The role assignment grants Owner to the platform-team group at rg-eql-prod-subscription, but the workload manages no role assignments of its own. Owner here over-privileges the group; Contributor covers every operation present. Recommendation: change the role to Contributor and reserve Owner for PIM-eligible activation when role-assignment delegation is actually required.",
       "location": { "file": "infra/rbac/subscription.bicep", "line": 31 },
       "references": [],
-      "confidence": "high"
+      "confidence": "medium",
+      "domain": "RBAC"
     },
     {
       "id": "agent:connection-string-instead-of-managed-identity",
@@ -86,7 +87,8 @@ Output conforms to the DO output contract. A populated example:
       "message": "The Logic App reads Key Vault via a stored connection string. Runtime auth should use the resource's System-Assigned Managed Identity with Key Vault Secrets User assigned at the vault. Recommendation: enable the MI and replace the connection string with an MI-backed reference.",
       "location": { "file": "infra/logicapp/subscription-workflow.bicep", "line": 58 },
       "references": [],
-      "confidence": "medium"
+      "confidence": "medium",
+      "domain": "RBAC"
     }
   ],
   "suppressed": []

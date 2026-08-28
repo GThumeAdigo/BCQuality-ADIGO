@@ -50,24 +50,24 @@ For each worklist item, evaluate the change and emit findings. Cite the matching
 
 ### Architectural choices
 
-- **Direct API vs middleware.** Use Azure Integration Services as the integration plane; do not call third-party APIs directly from AL. Retry, dead-letter, and observability sit in the plane; BC stays free of external credential management; third-party schema evolution does not break BC. Exception: simple one-shot lookups (currency conversion, address validation) may use `HttpClient` from AL directly, with timeouts and explicit error handling. A direct callout from a posting or business-logic path is a `blocker`.
+- **Direct API vs middleware.** A direct callout from posting uses hard severity only when emitted as the matching cited integration rule; otherwise source-review architecture concerns remain capped agent findings.
 - **Inbound to BC.** Prefer the API publisher pattern with custom API pages. Use OData for typed access, SOAP only when the consumer cannot do OData.
 - **Outbound from BC.** Publish business events; never poll BC from outside when events are available. For a subscriber outside BC, declare an `[ExternalBusinessEvent]` (not the in-process `[BusinessEvent]`) and fire it from a thin subscriber on the real event (release, post). Delivery is asynchronous and post-commit, so it is safe to fire from a posting or release path and nothing is delivered if the transaction rolls back. The external subscriber registers directly by POSTing to `api/microsoft/runtime/v1.0/externaleventsubscriptions` with a `notificationUrl` and a `clientState` (the shared secret echoed on every notification); it needs the `Ext. Events - Subscr` permission set. BC delivers by HTTP webhook to that URL. There is no direct Service Bus or Event Grid delivery for BC, so to land events on a queue, point `notificationUrl` at a thin Function that forwards to it. See `al-modern-integration-patterns` for the citable rules and `specs/contracts/integration-contract.md` for a worked example.
 
 ### Common patterns
 
-- **Idempotency.** Every inbound write needs an idempotency key. Project convention: the external system passes a correlation ID, BC stores it on the record, repeated calls with the same ID are no-ops. A missing idempotency check on an inbound write is a `major`.
+- **Idempotency.** A missing inbound idempotency check uses hard severity only when emitted as the matching cited integration rule; otherwise it remains capped agent review.
 - **Sync vs replicate.** Sync: BC is the source of truth, external mirrors. Replicate: external is the source of truth, BC mirrors. Hybrid: each field has a defined owner, documented. Pick one and write it down; implicit sync direction causes the worst integration bugs.
 - **Error escalation.** Transient errors retry with backoff in the integration plane; permanent errors dead-letter, notify the support inbox, and log to telemetry; business-rule rejections surface to the user via the relevant role centre cue.
 
 ### Anti-patterns (flag where present)
 
-- Polling BC every 30 seconds for changes when events are available (`blocker` when it replaces an available event path, else `major`).
+- Polling concerns use the matching cited integration rule when available; uncited architecture review remains capped.
 - Storing external credentials in BC isolated storage instead of Key Vault via the integration plane.
 - One giant payload containing all entities rather than one per business object.
 - Direct DB-to-DB sync that bypasses BC business logic.
 
-Set `confidence` to `high` for unambiguous matches (a literal `HttpClient.Send` from a posting subscriber, isolated-storage credential write), `medium` for heuristic detections or when any frontmatter dimension was `unknown`, and `low` for applicability-only advisories. When the change is clearly applicable to a rule but no violation is detected, emit `info` citing it. Provide `suggested-code` only for mechanical, local fixes; otherwise set `suggested-code-omission-reason`. See `skills/do.md` for the full contract.
+Knowledge-backed findings may use `high` confidence for unambiguous matches. Uncited agent findings are capped at `medium` confidence and `minor` severity. Satisfied checks contribute to summary coverage and never produce findings. Provide `suggested-code` only for mechanical, local fixes; otherwise set `suggested-code-omission-reason`. See `skills/do.md` for the full contract.
 
 Outcome selection: `completed` when every worklist item was evaluated (including an empty `findings` array); `no-knowledge` when no applicable rule survived Source, Relevance, and configuration filtering; `not-applicable` when the change touches no integration code; `partial` when a budget was hit before the worklist was exhausted; `failed` on an unrecoverable error (`outcome-reason` required).
 
@@ -92,7 +92,8 @@ Output conforms to the DO output contract. A populated example:
       "references": [
         { "path": "custom/knowledge/integration/al-never-call-external-services-from-posting.md" }
       ],
-      "confidence": "high"
+      "confidence": "high",
+      "domain": "Integration Architecture"
     },
     {
       "id": "custom/knowledge/integration/al-deduplicate-inbound-messages-with-an-idempotency-check.md",
@@ -102,7 +103,8 @@ Output conforms to the DO output contract. A populated example:
       "references": [
         { "path": "custom/knowledge/integration/al-deduplicate-inbound-messages-with-an-idempotency-check.md" }
       ],
-      "confidence": "medium"
+      "confidence": "medium",
+      "domain": "Integration Architecture"
     }
   ],
   "suppressed": []
