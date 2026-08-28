@@ -4,7 +4,7 @@ id: al-obsolete-tracker
 version: 1
 title: AL obsolete marking audit
 description: Audits Obsolete markings on AL objects for reason, tag, removal plan, and progress, and emits a findings report.
-inputs: [object-list, repository, pr-diff]
+inputs: [object-list, repository, pr-diff, deployment-context]
 outputs: [findings-report]
 bc-version: [all]
 technologies: [al]
@@ -16,7 +16,7 @@ application-area: [all]
 
 Walks the AL source for every `ObsoleteState` marking and reports whether each is well-formed and progressing toward removal. Every object, field, procedure, or enum value marked `ObsoleteState = Pending` should carry a clear `ObsoleteReason`, an `ObsoleteTag` encoding a target removal version, and a planned removal path. The skill flags orphans (Pending with no plan), broken removals (Removed with no prior Pending cycle), and abandoned obsolescence (Pending for several majors with no progress). It sources from the `upgrade` knowledge domain and cites curated obsoletion guidance where present; the hygiene checks the corpus does not encode are agent findings within its obsolescence domain. This is a leaf action skill: it invokes no sub-skills.
 
-An orchestrator invokes this skill with an `object-list`, a `repository`, or a `pr-diff`. It produces a single JSON document conforming to the DO output contract.
+An orchestrator invokes this skill with an `object-list`, a `repository`, or a `pr-diff`. Supply `deployment-context` when a finding depends on prior released states, removal timing, or persisted data; without it, review only the markings visible in the supplied source and omit deployment-dependent lifecycle findings. It produces a single JSON document conforming to the DO output contract.
 
 ## Source
 
@@ -39,20 +39,21 @@ Narrow to the obsolescence markings under review:
 
 - Every `ObsoleteState` property on tables, table extensions, fields, codeunits, procedures, pages, page extensions, enums, enum values, reports, queries, and xmlports in the supplied `object-list` or `repository`. When a `pr-diff` is the input, narrow to markings the diff adds or changes.
 - `Pending` markings missing an `ObsoleteReason`, missing an `ObsoleteTag` with a removal version, or carrying a generic reason such as "Deprecated".
-- `Removed` markings with no prior `Pending` cycle (read git history where available).
-- `Pending` markings that have extended beyond roughly two majors, `Pending` symbols still called from inside the extension, `Pending` procedures on public codeunits whose reason names no replacement, obsoleted enum values whose ordinal moved, and removal versions across the extension that do not converge on a single harvest target.
+- `Removed` markings with no prior `Pending` cycle only when the supplied released baseline establishes the prior public state.
+- `Pending` markings that have extended across supplied released baselines, `Pending` symbols still called from inside the extension, `Pending` procedures whose reason names no replacement, obsoleted enum values whose ordinal moved, and removal versions that do not converge on a declared target. Do not infer release age from an `ObsoleteTag` alone.
+- Migration or data-loss concerns only when `deployment-context` establishes that the affected element shipped or may hold persisted data. If the element is unreleased, apply the matching negative knowledge and do not require a migration path; if release status is unknown, omit the deployment-dependent finding.
 
 A curated `upgrade` file enters the worklist when its `keywords` intersect these tokens (for example `obsolete`, `obsoletion`, `enum`, `staging`, `removal`). Read its full body only after it makes the worklist. Resolve layer-precedence conflicts per READ and record dropped files in `suppressed`.
 
 ## Action
 
-For each marking, emit a finding.
+Evaluate each marking and emit a finding only for a concrete violation.
 
-When a defect maps onto a curated `upgrade` rule (a Pending with no reason or tag, an obsoleted enum value whose ordinal changed, a Removed that skipped Pending), emit a knowledge-backed finding citing that file: `id` equal to the file path, the file as primary reference, `severity` up to `blocker` only when the file states a platform-level guarantee otherwise `major`, `confidence` `high` for an unambiguous match.
+When a defect maps onto a curated `upgrade` rule (a Pending with no reason or tag, an obsoleted enum value whose ordinal changed, or a Removed state proven by the released baseline to have skipped Pending), emit a knowledge-backed finding citing that file: `id` equal to the file path, the file as primary reference, `severity` up to `blocker` only when the file states a platform-level guarantee otherwise `major`, `confidence` `high` for an unambiguous match.
 
 When a concrete hygiene defect has no curated rule (Pending abandoned for several majors, a Pending symbol with live internal callers, a Pending procedure whose reason names no migration path, removal versions that do not converge), emit an agent finding within this skill's obsolescence domain: `references: []`, `id` slug prefixed `agent:` (for example `agent:obsolete-pending-with-live-callers`), `confidence` capped at `medium`, `severity` capped at `minor`, and a self-contained `message` describing the hygiene gap and a concrete fix (migrate the internal callers in this PR, commit to a removal version). Where the impact would normally gate, keep `severity` at `minor` but say so plainly in the `message` and note the concern should be promoted to a knowledge-backed rule before it can gate. Hold every candidate to the precision bar in `skills/do.md`: steelman that the long-lived Pending is a deliberate, documented deferral before emitting, and omit when in doubt. Before emitting any agent candidate, check the worklisted knowledge for a match and upgrade it to a knowledge-backed finding if one exists.
 
-Set `suggested-code` when the fix is mechanical (adding an `ObsoleteTag = '2.0.0';` line next to an existing `ObsoleteReason`); otherwise set `suggested-code-omission-reason` (for example `requires migrating internal callers across multiple files`).
+Set `domain` to `Obsolescence` on every finding. Set `suggested-code` when the fix is mechanical (adding an `ObsoleteTag` line next to an existing `ObsoleteReason` using the supplied release target); otherwise set `suggested-code-omission-reason` (for example `requires migrating internal callers across multiple files`). Do not emit findings for satisfied rules; compliant worklist items contribute only to coverage.
 
 Outcome selection: `completed` when every marking was evaluated (including an empty `findings`); `no-knowledge` when no curated knowledge survived and no agent finding was raised; `not-applicable` when the task has no obsolescence markings to audit; `partial` or `failed` per the DO contract with `outcome-reason`.
 
@@ -81,6 +82,7 @@ Output conforms to the DO output contract. A populated example:
         { "path": "microsoft/knowledge/upgrade/obsoletion-requires-reason-and-tag.md" }
       ],
       "confidence": "high",
+      "domain": "Obsolescence",
       "suggested-code": "            ObsoleteTag = '2.0.0';"
     }
   ],

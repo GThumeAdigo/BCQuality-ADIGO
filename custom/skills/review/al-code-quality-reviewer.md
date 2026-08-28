@@ -14,13 +14,13 @@ application-area: [all]
 
 # AL code quality review
 
-Reviews Business Central production AL for design and structural problems that hurt the codebase later: direct database access from logic codeunits (the IDataAccess rule), business logic on table or page triggers, untestable seams, swallowed errors, excessive coupling and nesting, and thick event subscribers. This skill is about whether the code is well-designed and testable, not about clarity to a fresh reader (that is `al-readability-checker`) or test quality (that is the test validators). Most of what it surfaces is design judgement the curated corpus does not encode, so the bulk of its output is agent findings within a design quality remit, with curated `performance` and `security` rules cited where a structural defect maps onto one. This is a leaf action skill: it invokes no sub-skills.
+Reviews Business Central production AL for design and structural problems that hurt the codebase later: direct database access from logic codeunits, business logic on table or page triggers, untestable seams, swallowed errors, excessive coupling and nesting, thick event subscribers, and privacy-sensitive data handling. This skill is about whether the code is well-designed and testable, not about clarity to a fresh reader or test quality. Most of what it surfaces is design judgement the curated corpus does not encode, so the bulk of its output is agent findings within a design quality remit, with curated `performance`, `security`, and `privacy` rules cited where a structural defect maps onto one. This is a leaf action skill: it invokes no sub-skills.
 
 An orchestrator invokes this skill with a `pr-diff` (the standard PR-review entry point) or a `file-path` (single-file review). It produces a single JSON document conforming to the DO output contract.
 
 ## Source
 
-Read the BCQuality knowledge index once (the `knowledge-index.json` Entry's preparation step regenerates over the live, already-filtered clone). Take the index entries whose `domain` is `performance` or `security` as the citable candidate set across every enabled layer: a structural defect such as a commit inside a loop, a redundant Get, or an integration event that leaks a secret maps onto a curated rule and MUST cite it rather than be paraphrased. Do not open individual article files at this step; open an article's full body only once it enters the Worklist below. The design quality concerns this skill owns (IDataAccess routing, testability seams, coupling, error-handling robustness, subscriber discipline) are mostly not covered by the corpus; for a concrete, demonstrable defect there, emit an agent finding within this skill's design quality domain (see Action).
+Read the BCQuality knowledge index once (the `knowledge-index.json` Entry's preparation step regenerates over the live, already-filtered clone). Take the index entries whose `domain` is `performance`, `security`, or `privacy` as the citable candidate set across every enabled layer: a structural defect such as a commit inside a loop, a redundant Get, an integration event that leaks a secret, or PII written to telemetry maps onto a curated rule and MUST cite it rather than be paraphrased. Do not open individual article files at this step; open an article's full body only once it enters the Worklist below. The design quality concerns this skill owns (data-access routing, testability seams, coupling, error-handling robustness, subscriber discipline) are mostly not covered by the corpus; for a concrete, demonstrable defect there, emit an agent finding within this skill's design quality domain (see Action).
 
 ## Relevance
 
@@ -43,6 +43,7 @@ Narrow to the changed production AL (exclude test objects) and the structural sh
 - Procedures with high cyclomatic complexity, length over roughly 80 lines, fan-out over ten codeunits, or nesting at five levels or deeper.
 - Swallowed errors (`if not Codeunit.Run() then exit` with no handling), empty `Error('')`, and `Commit` inside a loop or without a documented reason.
 - Event subscriber codeunits that mix unrelated subscriptions, hold inline business logic, omit early exit on temporary or wrong record type, or leave `EventSubscriberInstance` unset on a non-trivial subscriber.
+- Telemetry, errors, integrations, or event payloads that expose personal or customer content contrary to a worklisted privacy article.
 
 A curated `performance` or `security` file enters the worklist when its `keywords` intersect these tokens (for example `commit`, `loop`, `get`, `integrationevent`, `secret`). Read its full `## Best Practice` / `## Anti Pattern` body only after it makes the worklist. Resolve layer-precedence conflicts per READ and record dropped files in `suppressed`.
 
@@ -50,11 +51,11 @@ A curated `performance` or `security` file enters the worklist when its `keyword
 
 For each worklisted shape, evaluate the diff and emit findings.
 
-When a defect maps onto a curated `performance` or `security` knowledge file (for example a `Commit` inside an iteration, a redundant `Get` on an already-loaded record, or an integration event exposing a secret), emit a knowledge-backed finding citing that file: `id` equal to the file path, the file as primary reference, `severity` up to `blocker` only when the file states a platform-level guarantee otherwise `major`, `confidence` `high` for an unambiguous pattern match.
+When a defect maps onto a curated `performance`, `security`, or `privacy` knowledge file (for example a `Commit` inside an iteration, a redundant `Get` on an already-loaded record, an integration event exposing a secret, or PII in telemetry), emit a knowledge-backed finding citing that file: `id` equal to the file path, the file as primary reference, `severity` up to `blocker` only when the file states a platform-level guarantee otherwise `major`, `confidence` `high` for an unambiguous pattern match.
 
 When a concrete, demonstrable design quality defect has no curated rule (a logic codeunit reaching the database directly instead of through IDataAccess, a public procedure with no test seam, a swallowed error, a thick subscriber doing inline business logic), emit an agent finding within this skill's design quality domain: `references: []`, `id` slug prefixed `agent:` (for example `agent:direct-db-access-from-logic`), `confidence` capped at `medium`, `severity` capped at `minor`, and a self-contained `message` describing both the defect and a concrete fix. Where the underlying impact would normally gate (a direct-DB-access violation the team treats as a block), keep `severity` at `minor` but say so plainly in the `message` and note the concern should be promoted to a knowledge-backed rule before it can gate. Hold every agent candidate to the precision bar in `skills/do.md`: steelman that the shape is a deliberate, valid choice before emitting, never emit stylistic or speculative concerns, and omit when in doubt. Defects outside design quality (pure readability, pure performance the corpus already covers) belong to other skills and MUST NOT be emitted here. Before emitting any agent candidate, check the worklisted knowledge for a match and upgrade it to a knowledge-backed finding if one exists.
 
-Set `suggested-code` when the fix is mechanical (deleting a swallowed-error guard, moving a `Commit` out of a loop, replacing `Error('')` with a Label-backed call); otherwise set `suggested-code-omission-reason` (for example `requires introducing an IDataAccess implementation`). Group repeated instances of one concern into a single finding with a line range rather than many near-identical ones.
+Set `domain` to `Code Quality` on every finding. Set `suggested-code` when the fix is mechanical (deleting a swallowed-error guard, moving a `Commit` out of a loop, replacing `Error('')` with a Label-backed call); otherwise set `suggested-code-omission-reason` (for example `requires introducing a data-access abstraction`). Group repeated instances of one concern into a single finding with a line range rather than many near-identical ones. Do not emit findings for satisfied rules; compliant worklist items contribute only to coverage.
 
 Outcome selection: `completed` when every worklist item was evaluated (including an empty `findings`); `no-knowledge` when no curated knowledge survived and no agent finding was raised; `not-applicable` when the diff has no production AL to review; `partial` or `failed` per the DO contract with `outcome-reason`.
 
@@ -82,7 +83,8 @@ Output conforms to the DO output contract. A populated example:
       "references": [
         { "path": "microsoft/knowledge/performance/avoid-commit-inside-loops.md" }
       ],
-      "confidence": "high"
+      "confidence": "high",
+      "domain": "Code Quality"
     },
     {
       "id": "agent:direct-db-access-from-logic",
@@ -94,6 +96,7 @@ Output conforms to the DO output contract. A populated example:
       },
       "references": [],
       "confidence": "medium",
+      "domain": "Code Quality",
       "suggested-code-omission-reason": "requires routing through the project's IDataAccess implementation"
     }
   ],

@@ -204,10 +204,10 @@ foreach ($case in $cases) {
     if (-not (Test-Path -LiteralPath $inputPath -PathType Leaf)) {
         $problems.Add("${id}: input does not exist: $input") | Out-Null
     }
-    if ($expected.Count -and $input -notmatch '\.bad\.[^.]+$') {
+    if ($expected.Count -and $input -notmatch '\.bad\.al\.txt$') {
         $problems.Add("${id}: positive case must use a .bad sample: $input") | Out-Null
     }
-    if (-not $expected.Count -and $input -notmatch '\.good\.[^.]+$') {
+    if (-not $expected.Count -and $input -notmatch '\.good\.al\.txt$') {
         $problems.Add("${id}: clean case must use a .good sample: $input") | Out-Null
     }
 
@@ -218,7 +218,7 @@ foreach ($case in $cases) {
         }
     }
     if ($expected.Count) {
-        $sampleSlug = ([System.IO.Path]::GetFileName($input) -replace '\.(?:good|bad)\.[^.]+$', '')
+        $sampleSlug = ([System.IO.Path]::GetFileName($input) -replace '\.(?:good|bad)\.al\.txt$', '')
         $primarySlug = [System.IO.Path]::GetFileNameWithoutExtension([string]$expected[0])
         if ($sampleSlug -ne $primarySlug) {
             $problems.Add("${id}: primary expected article '$primarySlug' must match sample slug '$sampleSlug'.") | Out-Null

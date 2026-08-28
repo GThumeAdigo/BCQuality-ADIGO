@@ -51,7 +51,7 @@ When the gap is an over-broad or wildcard scope that maps onto a curated `securi
 
 When the gap is a coverage defect with no curated rule (a defined object missing from every permission set, a `table` entry with no `tabledata` line, an orphan entry, a missing or noise `Caption`, a permission set out of the id range), emit an agent finding within this skill's security and permissioning domain: `references: []`, `id` slug prefixed `agent:` (for example `agent:object-missing-from-permission-set` or `agent:table-without-tabledata`), `confidence` capped at `medium`, `severity` capped at `minor`, and a self-contained `message` naming the object, the permission set, and the exact entry to add. Where the impact would normally gate (a new table absent from every permission set, which AppSource rejects), keep `severity` at `minor` but say so plainly in the `message` and note the concern should be promoted to a knowledge-backed rule before it can gate. Hold every candidate to the precision bar in `skills/do.md`: steelman that the object is intentionally not granted (a pure framework object behind `Access = Internal`) before emitting, and omit when in doubt. Before emitting any agent candidate, check the worklisted knowledge for a match and upgrade it to a knowledge-backed finding if one exists.
 
-Set `suggested-code` when the fix is the exact permission line to add (for example `tabledata "Event Registration" = RIMD;`); otherwise set `suggested-code-omission-reason`. Group repeated instances of one concern into a single finding rather than many near-identical ones.
+Set `domain` to `Permissions` on every finding. Set `suggested-code` when the fix is the exact permission line to add (for example `tabledata "Event Registration" = RIMD;`); otherwise set `suggested-code-omission-reason`. Group repeated instances of one concern into a single finding rather than many near-identical ones. Do not emit findings for satisfied rules; compliant worklist items contribute only to coverage.
 
 Outcome selection: `completed` when every object was evaluated (including an empty `findings`); `no-knowledge` when no curated knowledge survived and no agent finding was raised; `not-applicable` when the task has no objects or permission sets to compare; `partial` or `failed` per the DO contract with `outcome-reason`.
 
@@ -78,6 +78,7 @@ Output conforms to the DO output contract. A populated example:
       },
       "references": [],
       "confidence": "medium",
+      "domain": "Permissions",
       "suggested-code": "                tabledata \"Event Registration\" = RIMD;"
     }
   ],

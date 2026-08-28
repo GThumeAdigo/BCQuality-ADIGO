@@ -26,7 +26,7 @@ BCQuality contains **knowledge** and **skills**. It does not contain agents. Age
 
 ### Knowledge files
 
-Atomic markdown files with YAML frontmatter. Each file covers one concern — one thing an agent would cite when reviewing or generating code. Knowledge files live in two layers:
+Atomic markdown files with YAML frontmatter. Each file covers one concern — one thing an agent would cite when reviewing or generating code. Knowledge files live in three layers:
 
 - **`/microsoft/`** — Microsoft-endorsed layer.
   - `/microsoft/knowledge/` — Platform guardrails, official guidance.
@@ -35,7 +35,7 @@ Atomic markdown files with YAML frontmatter. Each file covers one concern — on
   - `/community/knowledge/` — Community patterns and shared guidance.
   - `/community/skills/` — Community-contributed action skills.
 
-- **`/custom/`** — Partner- and customer-specific overrides. Empty by default; populated in forks.
+- **`/custom/`** — Partner- and customer-specific extensions and overrides. Canonical BCQuality leaves this layer as a template; this fork intentionally populates it.
   - `/custom/knowledge/` — Organization-specific knowledge files.
   - `/custom/skills/` — Organization-specific action skills.
 
@@ -90,9 +90,11 @@ Code examples belong in separate files, not in the knowledge file itself. Knowle
 
 ## Scope
 
-The current curated corpus is focused on **technical AL code review**: AppSource and compatibility, data modeling, error handling, events, interfaces, performance, privacy, Query objects, security, style, telemetry, testing, UI, upgrade, and web services. These are the domains backed by knowledge files and registered review leaves today.
+The Microsoft layer currently focuses on **technical AL code review** across 16 knowledge domains: AppSource, breaking changes, data modeling, error handling, events, interfaces, performance, privacy, Query objects, security, style, telemetry, testing, UI, upgrade, and web services. The Community layer currently adds data-modeling, security, and UI guidance.
 
-Business Central functional domains (Finance, Supply Chain Management, Manufacturing, Jobs, Warehousing, Service), PowerShell, pipelines, and Power Platform remain valid future repository scope, but they are **not current coverage claims** until corresponding knowledge and action skills exist. Consumers should derive supported review scope from the live knowledge index and dispatched skills, not from roadmap breadth.
+This fork also carries an active Custom layer. Its 21 knowledge articles cover API exposure, modern integration patterns, operations, performance profiling, and feature-planning process guidance. Its 47 action skills span nine categories: review, testing, integration, AppSource, pipelines, Copilot and agent development, workflow artifact review, meta/integration hygiene, and operations. Custom skills include both review leaves and operational or generative procedures; each still follows the DO action-skill contract.
+
+Business Central functional domains (Finance, Supply Chain Management, Manufacturing, Jobs, Warehousing, Service), additional PowerShell coverage, and Power Platform remain valid future repository scope, but they are **not current coverage claims** until corresponding knowledge and action skills exist. Consumers should derive supported scope from the live knowledge index and dispatched skills, not from roadmap breadth or these point-in-time counts.
 
 ## How agents consume BCQuality
 
@@ -125,7 +127,7 @@ For the end-to-end flow — from orchestrator trigger through to how output reac
 │   ├── /knowledge/       # Knowledge files by domain
 │   │   └── /<domain>/    # Article + sibling samples, same convention
 │   └── /skills/          # Community action skills
-├── /custom/              # Partner/customer-specific overrides (empty; populated in forks)
+├── /custom/              # Fork-specific knowledge and action skills (populated in this fork)
 │   ├── /knowledge/
 │   └── /skills/
 ```

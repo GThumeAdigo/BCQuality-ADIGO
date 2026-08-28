@@ -45,6 +45,7 @@ ENTRY_SKILL_REQUIRED_KEYS = {"kind", "id", "version", "title"}
 
 STANDARD_INPUTS = {
     "pr-diff", "object-list", "file-path", "repository", "telemetry-query",
+    "deployment-context",
 }
 ALLOWED_OUTPUTS = {"findings-report"}
 VALID_SAMPLE_KINDS = {"good", "bad"}
@@ -62,7 +63,7 @@ ISO_ALPHA2 = re.compile(r"^[a-z]{2}$")
 RANGE_SHORTHAND = re.compile(r"^(\d+)\.\.(\d+)?$")
 FENCED_CODE_BLOCK = re.compile(r"^```", re.MULTILINE)
 HEADING_H2 = re.compile(r"^##\s+(.+?)\s*$", re.MULTILINE)
-SAMPLE_REFERENCE = re.compile(r"`([a-z0-9]+(?:-[a-z0-9]+)*\.(?:good|bad)\.[a-z0-9]+)`")
+SAMPLE_REFERENCE = re.compile(r"`([a-z0-9]+(?:-[a-z0-9]+)*\.(?:good|bad)\.[a-z0-9]+(?:\.txt)?)`")
 
 
 # --- Diagnostics ------------------------------------------------------------
@@ -482,7 +483,7 @@ def validate_knowledge_path(path: Path, root: Path, report: Report) -> None:
 
 
 def validate_samples_in_domain(domain_dir: Path, root: Path, report: Report) -> None:
-    """R14: every non-.md file must match <slug>.<kind>.<ext> with <slug>.md present."""
+    """R14: every sample must match <slug>.<kind>.<ext>[.txt] with <slug>.md present."""
     if not domain_dir.is_dir():
         return
     articles = {p.stem: p for p in domain_dir.glob("*.md")}
@@ -499,10 +500,10 @@ def validate_samples_in_domain(domain_dir: Path, root: Path, report: Report) -> 
         if not entry.is_file() or entry.suffix == ".md":
             continue
         name = entry.name
-        # Expect <slug>.<kind>.<ext>
-        m = re.match(r"^(?P<slug>[a-z0-9]+(?:-[a-z0-9]+)*)\.(?P<kind>[a-z0-9]+)\.(?P<ext>[a-z0-9]+)$", name)
+        # AL samples use a trailing .txt so consuming AL compilers ignore them.
+        m = re.match(r"^(?P<slug>[a-z0-9]+(?:-[a-z0-9]+)*)\.(?P<kind>[a-z0-9]+)\.(?P<ext>[a-z0-9]+)(?:\.txt)?$", name)
         if not m:
-            report.error(entry, "R14", f"sample file name must match '<slug>.<kind>.<ext>' with kebab-case slug: '{name}'")
+            report.error(entry, "R14", f"sample file name must match '<slug>.<kind>.<ext>[.txt]' with kebab-case slug: '{name}'")
             continue
         slug = m.group("slug")
         kind = m.group("kind")

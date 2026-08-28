@@ -1,6 +1,6 @@
 # Custom layer
 
-This folder holds partner- and customer-specific knowledge and action skills: content that applies to your organization but is not appropriate for the shared Microsoft or Community layers. It follows exactly the same formats as the other layers, so the consuming agent loads it automatically alongside `/microsoft/` and `/community/`.
+This folder is the populated Custom layer of the GThumeAdigo BCQuality fork. It holds partner-specific knowledge and portable action skills that are not authority for canonical Microsoft or Community content. It follows the same READ and DO contracts as the other layers, so consumers can load it alongside `/microsoft/` and `/community/`.
 
 ## Structure
 
@@ -32,11 +32,19 @@ Most integration articles ship `.good.al.txt` / `.bad.al.txt` companion samples.
 
 | Folder | Skills | Notes |
 |---|---|---|
-| `review/` | 14 | Net-new AL reviewers and auditors: multi-tenancy, permission-set, event-subscriber, obsolescence, integration-pattern, upgrade, code-quality, readability, table-refactor, performance, translation, AppSource, and major-release-readiness. Plus `al-extended-review`, a super-skill that composes the six net-new domain reviewers so they dispatch as a group alongside the platform `al-code-review`. |
-| `testing/` | 10 | The test agent suite (write, validate, run, coverage validate and enforce, user-guide tests, web-client run) plus the release-audit test-guide generator, Page Scripting e2e planning, and Copilot test-driven development. |
+| `review/` | 14 | AL review leaves for code quality, readability, performance, tables, permissions, events, translations, multi-tenancy, obsolescence, upgrade, integrations, AppSource, and major-release readiness, plus the `al-extended-review` super-skill. |
+| `testing/` | 10 | Test writing, validation, execution, coverage, user-guide testing, web-client verification, extension test-guide review, Page Scripting e2e review, and AI test-driven development. |
+| `integration/` | 4 | Modern BC integration patterns, Azure integration review, general BC integration architecture, and Business Central MCP data-surface review. |
+| `appsource/` | 2 | AppSource validation and major-release governance. |
+| `pipelines/` | 3 | AL-Go pipeline review, environment onboarding, and AL MCP Server workflow review. |
+| `copilot/` | 4 | Copilot PromptDialog, Copilot capability, AI Agent SDK, and AI development toolkit reviews. |
+| `workflow/` | 4 | Portable project-definition, feature-specification, feature-plan, and implementation-conformance reviews. These evaluate supplied artifacts and do not define a consumer's runtime workflow. |
+| `meta/` | 1 | BCQuality consumption and fork/submodule integration review. |
+| `operations/` | 5 | Performance profiling, SaaS restore, RBAC, security-group setup, and MCP troubleshooting procedures. |
+| **Total** | **47** | **Nine skill categories.** |
 
 ## How to use
 
-Fork or clone BCQuality into your own repository and add your content here. Knowledge files in `/custom/knowledge/` follow the same frontmatter schema and section requirements as every other layer. Action skills in `/custom/skills/` follow the Action Skill template defined in `/skills/`.
+Use this fork as a Git submodule or as a filtered committed vendor tree. Knowledge files in `/custom/knowledge/` follow the same frontmatter schema and section requirements as every other layer. Action skills in `/custom/skills/` follow the Action Skill template defined in `/skills/`; consumer-specific agent names, paths, and gates belong in the consuming scaffold rather than in these portable skills.
 
 When agents consume BCQuality, the custom layer is loaded alongside Microsoft and Community — your overrides apply automatically.

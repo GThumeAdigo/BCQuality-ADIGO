@@ -51,7 +51,7 @@ For each worklist entry, evaluate the diff against the file's `## Best Practice`
 
 When a concrete scale defect has no curated rule, emit an agent finding within this skill's performance domain: `references: []`, `id` slug prefixed `agent:` (for example `agent:flowfield-on-list-repeater` or `agent:findfirst-on-unbounded-table`), `confidence` capped at `medium`, `severity` capped at `minor`, and a self-contained `message` that states the cost at scale (one extra query per visible row per render, a full scan on a table that only grows) and a concrete fix (move the FlowField to a factbox, add a `SetRange` that resolves via a key). Where the impact would normally gate (a destructive `DeleteAll` with no filter), keep `severity` at `minor` but say so plainly in the `message` and note the concern should be promoted to a knowledge-backed rule before it can gate. Hold every candidate to the precision bar in `skills/do.md`: steelman that the table is small, the filter is set elsewhere, or the cost is documented and accepted before emitting, and omit when in doubt. The scope is strictly performance; defects outside this domain belong to other skills. Before emitting any agent candidate, check the worklisted knowledge for a match and upgrade it to a knowledge-backed finding if one exists.
 
-Set `suggested-code` when the fix is mechanical (replacing `Count() > 0` with `not IsEmpty()`, adding a `SetLoadFields` before a `FindSet`, adding a `HasFilter` guard before a `DeleteAll`); otherwise set `suggested-code-omission-reason` (for example `requires choosing the right secondary key to add`).
+Set `domain` to `Performance` on every finding. Set `suggested-code` when the fix is mechanical (replacing `Count() > 0` with `not IsEmpty()`, adding a `SetLoadFields` before a `FindSet`, adding a `HasFilter` guard before a `DeleteAll`); otherwise set `suggested-code-omission-reason` (for example `requires choosing the right secondary key to add`). Do not emit findings for satisfied rules; compliant worklist items contribute only to coverage.
 
 Outcome selection: `completed` when every worklist item was evaluated (including an empty `findings`); `no-knowledge` when no curated knowledge survived and no agent finding was raised; `not-applicable` when the diff has no AL to review; `partial` or `failed` per the DO contract with `outcome-reason`.
 
@@ -80,7 +80,8 @@ Output conforms to the DO output contract. A populated example:
       "references": [
         { "path": "microsoft/knowledge/performance/avoid-get-inside-loop-on-large-table.md" }
       ],
-      "confidence": "high"
+      "confidence": "high",
+      "domain": "Performance"
     },
     {
       "id": "agent:flowfield-on-list-repeater",
@@ -92,6 +93,7 @@ Output conforms to the DO output contract. A populated example:
       },
       "references": [],
       "confidence": "medium",
+      "domain": "Performance",
       "suggested-code-omission-reason": "fix is a layout decision between factbox placement and accepted cost"
     }
   ],

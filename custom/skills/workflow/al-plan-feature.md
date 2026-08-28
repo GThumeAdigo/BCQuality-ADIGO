@@ -1,10 +1,10 @@
 ---
 kind: action-skill
 id: plan-feature
-version: 1
+version: 2
 title: Feature Plan Review
-description: Reviews a Business Central feature plan and task list against its approved spec, object ID range, and verifier expectations, and emits a findings report.
-inputs: [repository, file-path]
+description: Reviews a Business Central feature plan and task list for traceability, feasible AL design, object allocation, and deployment-aware schema handling, and emits a findings report.
+inputs: [repository, deployment-context]
 outputs: [findings-report]
 bc-version: [all]
 technologies: [al]
@@ -14,79 +14,60 @@ application-area: [all]
 
 # Feature Plan Review
 
-Reviews the technical plan and ordered task list (`plan.md` + `tasks.md`) for a Business Central feature whose `spec.md` is approved, and emits a findings report. This is the bridge from what to how, with no production AL written yet, so the review checks that the plan maps the spec onto AL objects with IDs inside the assigned range, reuses standard BC first, declares the data model and cross-cutting concerns, lists verifiable tasks, and pre-flights cleanly against the verifier agents. This is a leaf action skill: it invokes no sub-skills.
-
-An orchestrator invokes this skill with a `repository` (audit `plan.md`/`tasks.md` against the spec, the technical design, and the house rules) or a `file-path` (review the `plan.md` alone). The skill produces a single JSON document conforming to the DO output contract. See `AGENTS.md`.
+Reviews the technical plan before implementation. The repository input must identify the feature specification, technical plan, task list, project constraints, assigned object ID range, and target Business Central context. Supply `deployment-context` when the plan changes schema and deployment-dependent migration coverage is in scope; without it, the skill omits those checks. Filenames and task syntax are consumer-defined. Return `not-applicable` when the core planning bundle is incomplete.
 
 ## Source
 
-The rule set is the planning discipline: the approved-spec precondition, the object-ID-range constraint, the reuse-standard-BC-first principle, the required `plan.md` and `tasks.md` sections, and the verifier pre-flight. Where a check maps onto a curated BCQuality rule (object ID range, IDataAccess seam, `ODataKeyFields` prohibition, upgrade step for schema changes), read the BCQuality knowledge index once and take the `style`, `performance`, and `upgrade` domain entries as the citable candidate set across every enabled layer; do not open an article's body until it enters the Worklist. The plan-structure rules are not covered by the corpus; for a concrete gap there, emit an agent finding within this skill's plan-governance domain. The house rules the plan must respect are referenced via `al-code-review`.
+Read the live BCQuality knowledge index and take entries in the `process`, `performance`, `security`, `privacy`, and `upgrade` domains across every enabled layer. Use only opened articles as citable rules. Planning completeness without a matching article may be emitted only as an agent finding under the `Feature Plan` domain.
 
 ## Relevance
 
-Apply the frontmatter matching rules defined in READ against the task context:
-
-- `bc-version` - the target BC version from `tech-design.md` or the solution's `app.json`, or `unknown`.
-- `technologies` - `[al]`.
-- `countries` - the customer localisation; default to the orchestrator's configured context, else `unknown`.
-- `application-area` - the application areas the planned objects touch; pass the actual set, do not substitute `[all]`.
-
-Discard files that are not feature plans. Retain conditionally applicable rules (any dimension `unknown`) only when configuration permits; findings derived from them have `confidence` no higher than `medium` and name the unknown dimension.
+Apply READ's frontmatter matching rules using the plan's target BC version, technologies, countries, and application areas. Deployment-dependent upgrade articles are relevant only when the supplied released baseline or deployment context establishes that the affected schema has shipped and may contain persisted data. If the context establishes that the schema is unreleased, include the applicable negative knowledge and do not require migration. If release status is unknown, omit deployment-dependent findings rather than assuming persisted data.
 
 ## Worklist
 
-Narrow to the plan rules that apply to the documents under review. A rule enters the worklist when the plan or task list exists, or its precondition is unmet.
+Review the supplied plan for:
 
-- **Approved-spec precondition** - `specs/features/<id>/spec.md` must exist and be approved with acceptance criteria and open questions resolved. If criteria or open questions are unresolved, planning is premature and `al-spec-feature` must run first.
-- **Inputs read** - the plan must reflect the feature `spec.md`, `specs/tech-design.md` (reuse standard BC, object ID range, data model), and the house rules in `al-code-review`. A plan inconsistent with the technical design is a finding.
-- **Reuse first, justify custom** - the plan must decide which standard BC modules to reuse and what custom AL is genuinely needed. Unjustified custom AL where a standard module fits is a finding.
-- **Object IDs in range** - every new object gets an ID inside the assigned range. An object ID outside the range is a finding.
-- **`plan.md` sections** - (from `specs/templates/feature-plan.md`) approach, standard BC reused, the AL object table (name, type, id, new/extend, purpose), data model, integration points, cross-cutting concerns (permissions, telemetry, upgrade/migration, performance), risks, and test strategy. A missing required section is a gap.
-- **`tasks.md` sections** - (from `specs/templates/feature-tasks.md`) an ordered, checkable list including explicit tasks for permission-set entries, telemetry, the build-and-verify pass, and docs/roadmap. Tests are opt-in (see the Testing policy in `AGENTS.md`): a test task per acceptance criterion is required only when the developer has opted in for this feature, and its absence is a finding only then. A missing class of task (permission-set entries, telemetry, build-and-verify, docs/roadmap) is a finding.
-- **Verifier pre-flight** - the plan must be sanity-checked against what the verifiers enforce: object IDs in range, an IDataAccess seam where logic touches the DB, no `ODataKeyFields`, an upgrade step for any schema change. A plan that would fail a verifier on contact is a finding.
-- **Roadmap status** - the roadmap item moves to `planned`. A stale status is a finding.
+- Traceability from each planned behaviour to the feature specification and acceptance criteria.
+- Explicit standard Business Central capabilities to reuse and justified custom AL gaps.
+- An object inventory with type, purpose, new-or-extended status, and IDs inside the assigned range.
+- Data model, integration boundaries, permissions, privacy, security, telemetry, performance, and failure-handling decisions that apply to the feature.
+- Ordered, checkable implementation tasks that cover the planned objects and cross-cutting work without requiring a consumer-specific task format.
+- Schema migration steps only for elements proven by the supplied baseline or deployment context to have shipped or to hold persisted production data.
+
+Open each candidate article in full only after it enters the worklist. Resolve layer precedence per READ and record discarded articles in `suppressed`.
 
 ## Action
 
-For each worklist item, evaluate the plan and task list and emit findings:
+For a knowledge-backed defect, copy the opened article path verbatim into both `id` and `references[0].path`, use only article-supported severity and confidence, and set `domain` to `Feature Plan`.
 
-- A plan written against an unapproved spec (acceptance criteria or open questions unresolved), or an `app.json`/object plan that allocates object IDs outside the assigned range, is a `blocker`: the implement step would start unclean or out of bounds.
-- A planned schema change with no upgrade step, logic that touches the DB with no IDataAccess seam, a planned `ODataKeyFields` usage, unjustified custom AL where a standard module fits, or (only when tests are opted in for the feature) a `tasks.md` missing a test task per acceptance criterion, is `major`.
-- A missing `plan.md` cross-cutting-concern (telemetry or performance not addressed), a missing permission-set-entry task, or a stale roadmap status, is `minor`.
-- When a rule is clearly applicable and the plan satisfies it, emit `info`.
+For a concrete planning defect with no matching article, emit an agent finding with `references: []`, an `agent:`-prefixed stable id, `severity: minor`, confidence no higher than `medium`, `domain: Feature Plan`, and a concrete recommendation. Never infer that production data exists. Do not require named interfaces, prohibited properties, tests, documentation tasks, verifier passes, roadmap statuses, or local skill names unless an opened article or supplied project constraint establishes that requirement. Do not emit findings for satisfied requirements.
 
-Cite a `style`, `performance`, or `upgrade` knowledge file in `references` when one matches (object ID range, IDataAccess, `ODataKeyFields`, upgrade step); otherwise emit an agent finding within this skill's domain (`references: []`, `id` prefixed `agent:`). Set `confidence` `high` for unambiguous gaps (an out-of-range ID, a missing test task, a planned `ODataKeyFields`), `medium` for judgement calls (whether custom AL is justified) or `unknown`-dimension cases. Keep inline references such as `al-spec-feature` (run first if the spec is unapproved), `al-code-review` (house rules), `al-performance-profiler`, `al-major-release-governance` (if the plan changes schema), `al-appsource-validation` (if bound for AppSource), and `al-implement-feature` (the next stage once approved) as prose; do not invoke them. This skill reviews the plan only; AL-level defects belong to the verifier skills. See `skills/do.md` for the full contract.
-
-Outcome selection: `completed` when every applicable plan rule was evaluated; `no-knowledge` when no applicable rule survived filtering; `not-applicable` when the task context has no feature plan to review; `partial` on a budget cutoff; `failed` on an unrecoverable error (`outcome-reason` required).
+Return `completed` when the core planning bundle and all context-supported checks were evaluated, `not-applicable` when required planning artifacts are missing, `no-knowledge` only when no applicable knowledge exists and no agent finding is emitted, and `partial` or `failed` as defined by DO. Missing deployment context reduces deployment-dependent coverage; it does not make unrelated planning review inapplicable.
 
 ## Output
 
-Output conforms to the DO output contract. A populated example:
+Output conforms to the DO output contract. Example knowledge-backed finding:
 
 ```json
 {
-  "skill": { "id": "plan-feature", "version": 1 },
+  "skill": { "id": "plan-feature", "version": 2 },
   "outcome": "completed",
   "summary": {
-    "counts": { "blocker": 1, "major": 1, "minor": 0, "info": 0 },
-    "coverage": { "worklist-size": 8, "items-evaluated": 8 }
+    "counts": { "blocker": 0, "major": 1, "minor": 0, "info": 0 },
+    "coverage": { "worklist-size": 5, "items-evaluated": 5 }
   },
   "findings": [
     {
-      "id": "agent:object-id-outside-range",
-      "severity": "blocker",
-      "message": "plan.md allocates table 60110 'Movement Header', but tech-design.md assigns the range 50100..50149. Object IDs outside the assigned range are rejected by the verifier and break AppSource ID-range rules. Recommendation: renumber the planned objects inside 50100..50149.",
-      "location": { "file": "specs/features/003-shipment/plan.md" },
-      "references": [],
-      "confidence": "high"
-    },
-    {
-      "id": "agent:schema-change-no-upgrade-step",
+      "id": "custom/knowledge/process/al-map-each-feature-to-an-object-id-range.md",
       "severity": "major",
-      "message": "plan.md adds a non-empty field to an existing table but tasks.md has no upgrade-codeunit task. The verifier al-upgrade-checker will flag this. Recommendation: add an upgrade step that migrates existing rows and a corresponding task in tasks.md.",
-      "location": { "file": "specs/features/003-shipment/tasks.md" },
-      "references": [],
-      "confidence": "high"
+      "message": "The plan allocates table 60110 while the supplied feature range is 50100..50149. Allocate the object inside the reserved range before implementation.",
+      "references": [
+        { "path": "custom/knowledge/process/al-map-each-feature-to-an-object-id-range.md" }
+      ],
+      "confidence": "high",
+      "domain": "Feature Plan",
+      "suggested-code-omission-reason": "requires selecting an unused ID from the assigned range"
     }
   ],
   "suppressed": []

@@ -4,7 +4,7 @@ id: al-upgrade-checker
 version: 1
 title: AL upgrade coverage review
 description: Verifies that schema changes in an AL extension are handled by an upgrade codeunit for existing-tenant data, and emits a findings report.
-inputs: [pr-diff, repository]
+inputs: [pr-diff, repository, deployment-context]
 outputs: [findings-report]
 bc-version: [all]
 technologies: [al]
@@ -16,7 +16,7 @@ application-area: [all]
 
 Compares a schema diff against the extension's upgrade codeunit and reports every migration that is missing or broken. It catches the silent install failure: a clean install on a dev sandbox, then `Install-NAVApp` errors on production tenants because existing data is not migrated. The skill covers new required fields, fields with `InitValue`, field renames, type or length narrowing, obsoleted fields, enum value changes, primary key changes, per-company versus per-database scope, idempotency, and upgrade-tag registration. It sources from the `upgrade` knowledge domain and cites curated rules where a schema change maps onto one; gaps the corpus does not encode are agent findings within its upgrade domain. This is a leaf action skill: it invokes no sub-skills.
 
-An orchestrator invokes this skill with a `pr-diff` (the standard PR-review entry point) or a `repository`. It produces a single JSON document conforming to the DO output contract.
+An orchestrator invokes this skill with a `pr-diff` or a `repository`. Supply `deployment-context` with the released schema baseline and any evidence of persisted production data when migration coverage is in scope. Without it, the skill may review upgrade code that is present but MUST omit findings that assume a schema element shipped or contains data. It produces a single JSON document conforming to the DO output contract.
 
 ## Source
 
@@ -35,7 +35,7 @@ Discard files that are not applicable. Retain conditionally applicable files (an
 
 ## Worklist
 
-Compute the schema diff and narrow to the changes that need a migration:
+Compute the schema diff against the supplied released baseline. A change enters the migration worklist only when `deployment-context` establishes that the affected element shipped or may contain persisted data. If the element is new in the current unreleased cycle, apply `microsoft/knowledge/upgrade/unreleased-schema-change-needs-no-upgrade-path.md` and do not require migration. If release status is unknown, omit the deployment-dependent candidate. For eligible changes, review:
 
 - New required or non-nullable fields with no default, and new fields with an `InitValue` that downstream code assumes is populated on existing rows.
 - Field renames (AL `Rename` moves only metadata, not data, and does not rewrite JSON keys that store the old field name).
@@ -52,11 +52,11 @@ A curated `upgrade` file enters the worklist when its `keywords` intersect these
 
 For each schema change, check the upgrade codeunit covers it and emit findings.
 
-When a gap maps onto a curated `upgrade` rule (a new field relying on `InitValue` for existing rows, a missing upgrade tag, an enum value added in the middle), emit a knowledge-backed finding citing that file: `id` equal to the file path, the file as primary reference, `severity` up to `blocker` only when the file states a platform-level guarantee otherwise `major`, `confidence` `high` for an unambiguous match. State the tenants affected in the `message`.
+When a gap maps onto a curated `upgrade` rule (a released field relying on `InitValue` for existing rows, a missing upgrade tag in a required migration, or an enum value added in the middle of a shipped enum), emit a knowledge-backed finding citing that file: `id` equal to the file path, the file as primary reference, `severity` up to `blocker` only when the file states a platform-level guarantee otherwise `major`, `confidence` `high` only when both the code pattern and deployment applicability are unambiguous. State the supplied deployment evidence in the `message`.
 
 When a concrete migration gap has no curated rule (a per-company step that writes a per-database surface and risks duplicate writes, a non-idempotent migration that appends rows on re-run, a primary-key change with no disambiguation, a wire-contract break needing an API version bump), emit an agent finding within this skill's upgrade domain: `references: []`, `id` slug prefixed `agent:` (for example `agent:non-idempotent-upgrade-step`), `confidence` capped at `medium`, `severity` capped at `minor`, and a self-contained `message` describing the failure on tenants with existing data and a concrete fix. Where the impact would normally gate (a missing migration that fails the install), keep `severity` at `minor` but say so plainly in the `message` and note the concern should be promoted to a knowledge-backed rule before it can gate. Hold every candidate to the precision bar in `skills/do.md`: steelman that the migration is covered by a step outside the diff before emitting, and omit when in doubt. Before emitting any agent candidate, check the worklisted knowledge for a match and upgrade it to a knowledge-backed finding if one exists.
 
-Set `suggested-code` when the fix is mechanical (wrapping a step in `UpgradeTagMgt.HasUpgradeTag`/`SetUpgradeTag`); otherwise set `suggested-code-omission-reason` (for example `requires authoring a new upgrade step body`).
+Set `domain` to `Upgrade` on every finding. Set `suggested-code` when the fix is mechanical (wrapping a step in `UpgradeTagMgt.HasUpgradeTag`/`SetUpgradeTag`); otherwise set `suggested-code-omission-reason` (for example `requires authoring a new upgrade step body`). Do not emit findings for satisfied rules; compliant worklist items contribute only to coverage.
 
 Outcome selection: `completed` when every schema change was evaluated (including an empty `findings`); `no-knowledge` when no curated knowledge survived and no agent finding was raised; `not-applicable` when the diff has no schema change to review; `partial` or `failed` per the DO contract with `outcome-reason`.
 
@@ -76,7 +76,7 @@ Output conforms to the DO output contract. A populated example:
     {
       "id": "microsoft/knowledge/upgrade/initvalue-does-not-update-existing-rows.md",
       "severity": "major",
-      "message": "A required enum field Status Code was added to table Event Registration with no upgrade step. InitValue applies to new rows only, so every existing row on every tenant is left empty. Add a step to OnUpgradePerCompany that sets Status Code to Draft on existing rows, behind a fresh UpgradeTag.",
+      "message": "The supplied released baseline shows table Event Registration already contains tenant data. A required enum field Status Code was added with no upgrade step; InitValue applies only to new rows. Add a tagged OnUpgradePerCompany step that sets Status Code to Draft on existing rows.",
       "location": {
         "file": "src/EventRegistration.Table.al",
         "line": 30
@@ -84,7 +84,8 @@ Output conforms to the DO output contract. A populated example:
       "references": [
         { "path": "microsoft/knowledge/upgrade/initvalue-does-not-update-existing-rows.md" }
       ],
-      "confidence": "high"
+      "confidence": "high",
+      "domain": "Upgrade"
     }
   ],
   "suppressed": []

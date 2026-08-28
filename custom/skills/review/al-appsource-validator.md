@@ -49,13 +49,13 @@ A curated `security` or `style` file enters the worklist when its `keywords` int
 
 ## Action
 
-For each gate, emit a finding.
+Evaluate each gate and emit a finding only for a concrete violation.
 
 When the gate maps onto a curated `security` or `style` rule (an over-broad permission grant, a page field missing a `Caption` or `ToolTip`), emit a knowledge-backed finding citing that file: `id` equal to the file path, the file as primary reference, `severity` up to `blocker` only when the file states a platform-level guarantee otherwise `major`, `confidence` `high` for an unambiguous match.
 
 When the gate is an AppSource-specific defect with no curated rule, emit an agent finding within this skill's AppSource compliance domain: `references: []`, `id` slug prefixed `agent:` (for example `agent:as0036-empty-brief` or `agent:runtime-target-mismatch`), `confidence` capped at `medium`, `severity` capped at `minor`, and a self-contained `message` naming the `AS0xxx` rule or listing requirement and the concrete fix. Where the impact would normally gate (any hard AppSource rejection), keep `severity` at `minor` but say so plainly in the `message` and note the concern should be promoted to a knowledge-backed rule before it can gate. Hold every candidate to the precision bar in `skills/do.md`: steelman that the field is intentionally set as-is before emitting, and omit when in doubt. Before emitting any agent candidate, check the worklisted knowledge for a match and upgrade it to a knowledge-backed finding if one exists.
 
-Set `suggested-code` when the fix is a single contiguous metadata edit (setting a `brief` value, correcting a `runtime` number); otherwise set `suggested-code-omission-reason` (for example `requires creating a logo asset` or `requires a live privacy-policy URL`).
+Set `domain` to `AppSource` on every finding. Set `suggested-code` when the fix is a single contiguous metadata edit (setting a `brief` value, correcting a `runtime` number); otherwise set `suggested-code-omission-reason` (for example `requires creating a logo asset` or `requires a live privacy-policy URL`). Do not emit findings for satisfied rules; compliant worklist items contribute only to coverage.
 
 Outcome selection: `completed` when every gate was evaluated (including an empty `findings`); `no-knowledge` when no curated knowledge survived and no agent finding was raised; `not-applicable` when the task has no extension manifest to validate; `partial` or `failed` per the DO contract with `outcome-reason`.
 
@@ -82,6 +82,7 @@ Output conforms to the DO output contract. A populated example:
       },
       "references": [],
       "confidence": "medium",
+      "domain": "AppSource",
       "suggested-code": "  \"brief\": \"Stage-and-forward integration for warehouse shipments.\","
     }
   ],

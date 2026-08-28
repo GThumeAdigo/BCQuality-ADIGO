@@ -52,7 +52,7 @@ When a defect maps onto a curated file (subscriber parameter names that diverge 
 
 When a concrete binding-correctness defect has no curated rule (a publisher that does not resolve, a `var` mismatch that silently drops mutations, a broken `IsHandled` flow, a `Manual` subscriber nobody binds, a thick handler with inline business logic), emit an agent finding within this skill's event-subscriber domain: `references: []`, `id` slug prefixed `agent:` (for example `agent:subscriber-signature-drift`), `confidence` capped at `medium`, `severity` capped at `minor`, and a self-contained `message` describing why the subscriber will not fire or will misbehave at runtime and the concrete fix. Where the impact would normally gate (a signature drift that silently breaks `IsHandled`), keep `severity` at `minor` but say so plainly in the `message` and note the concern should be promoted to a knowledge-backed rule before it can gate. Hold every candidate to the precision bar in `skills/do.md`: steelman that the loose signature or unbound manual instance is intentional and resolved by code outside the diff before emitting, and omit when in doubt. Before emitting any agent candidate, check the worklisted knowledge for a match and upgrade it to a knowledge-backed finding if one exists.
 
-Set `suggested-code` when the fix is mechanical (adding a missing `var` to a parameter, adding an early-exit guard); otherwise set `suggested-code-omission-reason` (for example `requires the publisher's exact signature from the dependency symbols`).
+Set `domain` to `Event Subscribers` on every finding. Set `suggested-code` when the fix is mechanical (adding a missing `var` to a parameter, adding an early-exit guard); otherwise set `suggested-code-omission-reason` (for example `requires the publisher's exact signature from the dependency symbols`). Do not emit findings for satisfied rules; compliant worklist items contribute only to coverage.
 
 Outcome selection: `completed` when every subscriber was evaluated (including an empty `findings`); `no-knowledge` when no curated knowledge survived and no agent finding was raised; `not-applicable` when the task has no event subscribers to audit; `partial` or `failed` per the DO contract with `outcome-reason`.
 
@@ -79,6 +79,7 @@ Output conforms to the DO output contract. A populated example:
       },
       "references": [],
       "confidence": "medium",
+      "domain": "Event Subscribers",
       "suggested-code-omission-reason": "requires the publisher's exact parameter list from the base app symbols"
     }
   ],

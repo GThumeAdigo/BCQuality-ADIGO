@@ -2,8 +2,14 @@
 /microsoft/ @jesperschulz
 /skills/ @jesperschulz
 
-# GitHub Actions and CI
-/.github/ @jesperschulz
+# Fork documentation, tools, and CI retain upstream review while adding the fork maintainer
+/README.md @GThumeAdigo @jesperschulz
+/agent-consumption.md @GThumeAdigo @jesperschulz
+/tools/ @GThumeAdigo @jesperschulz
+/.github/ @GThumeAdigo @jesperschulz
+
+# Fork-specific content
+/custom/ @GThumeAdigo
 
 # Domain experts — required reviewers for coding rules
 /microsoft/knowledge/events/      @AleksandricMarko @pchriste-microsoft-com

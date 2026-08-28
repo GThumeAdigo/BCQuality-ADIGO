@@ -50,7 +50,7 @@ For each worklist entry, evaluate the diff against the file's `## Best Practice`
 
 When a concrete readability defect has no curated rule (commented-out code, an opaque abbreviation that a fresh reader cannot decode, a TODO with no tracking reference), emit an agent finding within this skill's style and readability domain: `references: []`, `id` slug prefixed `agent:` (for example `agent:opaque-abbreviation`), `confidence` capped at `medium`, `severity` capped at `minor`, and a self-contained `message` naming the issue and a concrete rename or removal. Hold every candidate to the precision bar in `skills/do.md`: as a dedicated style skill, readability preferences are inside this skill's domain, but still steelman that the choice is a deliberate, established convention before emitting, and omit when in doubt. Defects outside style and readability belong to other skills. Before emitting any agent candidate, check the worklisted knowledge for a match and upgrade it to a knowledge-backed finding if one exists.
 
-Set `suggested-code` when the fix is mechanical (adding a `Comment` to a label, lowercasing a reserved keyword, moving an inline `Label` to object scope, deleting commented-out lines); otherwise set `suggested-code-omission-reason`. Group repeated instances of one concern into a single finding with a line range rather than many near-identical ones.
+Set `domain` to `Readability` on every finding. Set `suggested-code` when the fix is mechanical (adding a `Comment` to a label, lowercasing a reserved keyword, moving an inline `Label` to object scope, deleting commented-out lines); otherwise set `suggested-code-omission-reason`. Group repeated instances of one concern into a single finding with a line range rather than many near-identical ones. Do not emit findings for satisfied rules; compliant worklist items contribute only to coverage.
 
 Outcome selection: `completed` when every worklist item was evaluated (including an empty `findings`); `no-knowledge` when no curated knowledge survived and no agent finding was raised; `not-applicable` when the diff has no AL to review; `partial` or `failed` per the DO contract with `outcome-reason`.
 
@@ -78,7 +78,8 @@ Output conforms to the DO output contract. A populated example:
       "references": [
         { "path": "microsoft/knowledge/style/label-comment-explains-placeholders.md" }
       ],
-      "confidence": "high"
+      "confidence": "high",
+      "domain": "Readability"
     }
   ],
   "suppressed": []

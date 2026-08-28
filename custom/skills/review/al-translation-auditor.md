@@ -50,7 +50,7 @@ When the gap maps onto a curated `style` rule (a substituted label with no expla
 
 When the gap is a coverage defect with no curated rule (a missing xliff for a supported locale, an untranslated or empty target, a verbatim target, an orphan trans-unit, a truncation risk), emit an agent finding within this skill's translation domain: `references: []`, `id` slug prefixed `agent:` (for example `agent:missing-xliff-for-supported-country`), `confidence` capped at `medium`, `severity` capped at `minor`, and a self-contained `message` naming the locale or string and the concrete remedy (generate the xliff, translate the target). Where the impact would normally gate (a missing locale that AppSource rejects), keep `severity` at `minor` but say so plainly in the `message` and note the concern should be promoted to a knowledge-backed rule before it can gate. Hold every candidate to the precision bar in `skills/do.md`: steelman that the locale legitimately falls back to a sibling or that an identical target is correct for that string before emitting, and omit when in doubt. Before emitting any agent candidate, check the worklisted knowledge for a match and upgrade it to a knowledge-backed finding if one exists.
 
-Set `suggested-code` only when the fix is an exact, contiguous edit to an AL source string (adding a `Comment` attribute to a label); a missing or untranslated xliff is not a single-line source replacement, so set `suggested-code-omission-reason` (for example `requires generating and translating an xliff file`).
+Set `domain` to `Translation` on every finding. Set `suggested-code` only when the fix is an exact, contiguous edit to an AL source string (adding a `Comment` attribute to a label); a missing or untranslated xliff is not a single-line source replacement, so set `suggested-code-omission-reason` (for example `requires generating and translating an xliff file`). Do not emit findings for satisfied rules; compliant worklist items contribute only to coverage.
 
 Outcome selection: `completed` when every supported locale and source string was evaluated (including an empty `findings`); `no-knowledge` when no curated knowledge survived and no agent finding was raised; `not-applicable` when the task has no source strings or translations to compare; `partial` or `failed` per the DO contract with `outcome-reason`.
 
@@ -73,6 +73,7 @@ Output conforms to the DO output contract. A populated example:
       "message": "AppSourceCop.json declares AU as a supported country but no Translations xliff for en-AU exists, so AU tenants see whatever the default xliff carries. Generate the en-AU xliff and translate it, or document an explicit fallback to en-NZ. Impact would normally be major because AppSource validation rejects this; emitted as minor because no curated rule backs it. This concern should be promoted to a knowledge-backed rule before it can gate.",
       "references": [],
       "confidence": "medium",
+      "domain": "Translation",
       "suggested-code-omission-reason": "requires generating and translating a new xliff file"
     }
   ],

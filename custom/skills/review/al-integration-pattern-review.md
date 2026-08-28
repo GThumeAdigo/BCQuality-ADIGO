@@ -55,7 +55,7 @@ When a defect maps onto a curated knowledge file, emit a knowledge-backed findin
 
 When a concrete, demonstrable integration defect has no curated rule (a synchronous sleep-and-poll wait loop in an inbound API handler, a missing polling framing record or lock, a missing inbound idempotency lookup keyed on the source id, a missing or non-deterministic outbound idempotency key, a mutated published Business Event signature, a dropped correlation id, cross-stage global state), emit an agent finding within this skill's integration domain: `references: []`, `id` slug prefixed `agent:` (for example `agent:missing-inbound-idempotency-check`), `confidence` capped at `medium`, `severity` capped at `minor`, and a self-contained `message` describing the failure mode under a slow, down, or duplicating external system and a concrete fix. Where the impact would normally gate (a synchronous wait loop that ties up a handler), keep `severity` at `minor` but say so plainly in the `message` and note the concern should be promoted to a knowledge-backed rule before it can gate. Hold every candidate to the precision bar in `skills/do.md`: steelman that the path is correct as written before emitting, and omit when in doubt. Before emitting any agent candidate, check the worklisted knowledge for a match and upgrade it to a knowledge-backed finding if one exists.
 
-Set `suggested-code` when the fix is mechanical (adding a deterministic `Idempotency-Key` header from the Integration Message GUID, moving a `Commit` out of a loop); otherwise set `suggested-code-omission-reason` (for example `requires introducing a staging table and Job Queue sender`).
+Set `domain` to `Integration` on every finding. Set `suggested-code` when the fix is mechanical (adding a deterministic `Idempotency-Key` header from the Integration Message GUID, moving a `Commit` out of a loop); otherwise set `suggested-code-omission-reason` (for example `requires introducing a staging table and Job Queue sender`). Do not emit findings for satisfied rules; compliant worklist items contribute only to coverage.
 
 Outcome selection: `completed` when every worklist item was evaluated (including an empty `findings`); `no-knowledge` when no curated knowledge survived and no agent finding was raised; `not-applicable` when the diff has no integration code to review; `partial` or `failed` per the DO contract with `outcome-reason`.
 
@@ -83,7 +83,8 @@ Output conforms to the DO output contract. A populated example:
       "references": [
         { "path": "custom/knowledge/integration/al-never-call-external-services-from-posting.md" }
       ],
-      "confidence": "high"
+      "confidence": "high",
+      "domain": "Integration"
     },
     {
       "id": "agent:missing-outbound-idempotency-key",
@@ -96,6 +97,7 @@ Output conforms to the DO output contract. A populated example:
       },
       "references": [],
       "confidence": "medium",
+      "domain": "Integration",
       "suggested-code-omission-reason": "requires the Integration Message GUID variable in scope at the call site"
     }
   ],
