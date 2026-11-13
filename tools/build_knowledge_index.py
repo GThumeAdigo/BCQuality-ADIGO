@@ -57,16 +57,6 @@ def lean_description(text: str, maximum: int = 120) -> str:
     return cut.rstrip() + "…"
 
 
-def source_tree_digest(root: Path, paths: list[Path]) -> str:
-    digest = hashlib.sha256()
-    for path in sorted(paths, key=lambda item: item.relative_to(root).as_posix()):
-        digest.update(path.relative_to(root).as_posix().encode("utf-8"))
-        digest.update(b"\0")
-        digest.update(path.read_bytes())
-        digest.update(b"\0")
-    return digest.hexdigest()
-
-
 def source_snapshot(articles: list[dict[str, Any]]) -> str:
     manifest = [{"path": item["path"], "sha256": item["sourceSha256"]} for item in sorted(articles, key=lambda item: item["path"])]
     return hashlib.sha256(json.dumps(manifest, separators=(",", ":")).encode("utf-8")).hexdigest()
@@ -124,9 +114,8 @@ def build_index(
                 "sourceSha256": hashlib.sha256(path.read_bytes()).hexdigest() if path.is_file() else "",
             })
     return {
-        "version": 2,
+        "version": 1,
         "generatedAt": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
-        "sourceTreeDigest": source_tree_digest(root, paths),
         "sourceSnapshot": source_snapshot(articles),
         "enabledLayers": effective_layers,
         "knowledgeAllow": knowledge_allow or [],

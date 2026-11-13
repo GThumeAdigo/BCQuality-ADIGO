@@ -292,7 +292,7 @@ class IndexBuilderTests(unittest.TestCase):
         )
         self.assertEqual(expected_full, sorted(article["path"] for article in full["articles"]))
         self.assertEqual(len(expected_full), full["articleCount"])
-        self.assertRegex(full["sourceTreeDigest"], r"^[0-9a-f]{64}$")
+        self.assertRegex(full["sourceSnapshot"], r"^[0-9a-f]{64}$")
         filtered = INDEX.build_index(ROOT, ["microsoft", "custom"])
         expected_filtered = [path for path in expected_full if path.startswith(("microsoft/", "custom/"))]
         self.assertEqual(expected_filtered, sorted(article["path"] for article in filtered["articles"]))
@@ -301,15 +301,15 @@ class IndexBuilderTests(unittest.TestCase):
     def test_digest_is_deterministic_and_content_sensitive(self) -> None:
         first = INDEX.build_index(ROOT, ["custom"])
         second = INDEX.build_index(ROOT, ["custom"])
-        self.assertEqual(first["sourceTreeDigest"], second["sourceTreeDigest"])
+        self.assertEqual(first["sourceSnapshot"], second["sourceSnapshot"])
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             article = root / "custom/knowledge/test/example.md"
             article.parent.mkdir(parents=True)
             article.write_text("---\ndomain: test\n---\n# A\n\n## Description\nOne.\n", encoding="utf-8")
-            before = INDEX.build_index(root)["sourceTreeDigest"]
+            before = INDEX.build_index(root)["sourceSnapshot"]
             article.write_text(article.read_text(encoding="utf-8") + "Changed.\n", encoding="utf-8")
-            self.assertNotEqual(before, INDEX.build_index(root)["sourceTreeDigest"])
+            self.assertNotEqual(before, INDEX.build_index(root)["sourceSnapshot"])
 
     def test_rejects_unknown_and_duplicate_layers(self) -> None:
         with self.assertRaises(ValueError):
@@ -355,7 +355,7 @@ class IndexBuilderTests(unittest.TestCase):
             powershell = json.loads(ps_path.read_text(encoding="utf-8-sig"))
             python = INDEX.build_index(ROOT, ["microsoft", "custom"])
             self.assertEqual(python["enabledLayers"], powershell["enabledLayers"])
-            self.assertEqual(python["sourceTreeDigest"], powershell["sourceTreeDigest"])
+            self.assertEqual(python["sourceSnapshot"], powershell["sourceSnapshot"])
             self.assertEqual(
                 [article["path"] for article in python["articles"]],
                 [article["path"] for article in powershell["articles"]],

@@ -130,6 +130,13 @@ $leafCandidates = @(
         }
         Get-ChildItem -LiteralPath $reviewDirectory -File -Filter 'al-*-review.md' |
             Where-Object Name -ne 'al-code-review.md' |
+            Where-Object {
+                # Fork rule: a Custom-layer leaf without a same-named knowledge domain in
+                # any layer is an org-specific audit, not a knowledge-backed leaf, so the
+                # paired-sample evaluation does not apply to it.
+                $leafDomain = $_.BaseName -replace '^al-', '' -replace '-review$', ''
+                ($layer.Name -ne 'custom') -or (@($layers | Where-Object { Test-Path -LiteralPath (Join-Path $Root "$($_.Name)/knowledge/$leafDomain") -PathType Container }).Count -gt 0)
+            } |
             ForEach-Object {
                 [pscustomobject]@{
                     Domain = $_.BaseName -replace '^al-', '' -replace '-review$', ''
