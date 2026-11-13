@@ -67,6 +67,11 @@ def source_tree_digest(root: Path, paths: list[Path]) -> str:
     return digest.hexdigest()
 
 
+def source_snapshot(articles: list[dict[str, Any]]) -> str:
+    manifest = [{"path": item["path"], "sha256": item["sourceSha256"]} for item in sorted(articles, key=lambda item: item["path"])]
+    return hashlib.sha256(json.dumps(manifest, separators=(",", ":")).encode("utf-8")).hexdigest()
+
+
 def build_index(
     root: Path,
     enabled_layers: list[str] | None = None,
@@ -100,6 +105,7 @@ def build_index(
                 "title": title,
                 "description": description if full_index else lean_description(description),
                 "parsed": True,
+                "sourceSha256": hashlib.sha256(path.read_bytes()).hexdigest(),
             })
         except (OSError, UnicodeError, ValueError, yaml.YAMLError):
             domain = relative.split("/knowledge/", 1)[1].split("/", 1)[0] if "/knowledge/" in relative else ""
@@ -115,11 +121,13 @@ def build_index(
                 "title": "",
                 "description": "",
                 "parsed": False,
+                "sourceSha256": hashlib.sha256(path.read_bytes()).hexdigest() if path.is_file() else "",
             })
     return {
         "version": 2,
         "generatedAt": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         "sourceTreeDigest": source_tree_digest(root, paths),
+        "sourceSnapshot": source_snapshot(articles),
         "enabledLayers": effective_layers,
         "knowledgeAllow": knowledge_allow or [],
         "knowledgeDeny": knowledge_deny or [],
