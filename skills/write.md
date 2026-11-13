@@ -16,7 +16,7 @@ Before authoring anything, confirm a knowledge file is the right artifact. BCQua
 - **Skills** (`*/skills/**`) hold only finder/applier mechanics — how to discover, filter, worklist, and emit findings. See `skills/do.md`.
 - **Knowledge files** (`*/knowledge/**`) hold every Business-Central-specific fact a skill acts on.
 
-A new BC fact is therefore a knowledge file, never a skill edit. In particular, if you arrived here because a review agent flagged something it should not have (a false positive) or missed something it should have caught, the remedy is a knowledge file — apply the admission test in the [README](../README.md#what-belongs-here): *would a capable LLM get this wrong without the file?* If you find yourself editing a skill to stop it flagging something, stop and write a knowledge file instead.
+A new BC fact is therefore a knowledge file, never a skill edit. In particular, if you arrived here because a review agent flagged something it should not have (a false positive) or missed something it should have caught, the remedy is a knowledge file — apply the [admission test](../docs/contributing.md#what-belongs-here): *would a capable LLM get this wrong without the file?* If you find yourself editing a skill to stop it flagging something, stop and write a knowledge file instead.
 
 ### Negative knowledge is first-class
 
@@ -56,9 +56,16 @@ Target under 100 lines. Ideal under 50. Long files almost always mean two concer
 
 Custom `##` sections are permitted when they serve the concern (for example, `## Applies to` for scope caveats or `## See also` for related files). Consumers are not required to understand them, so do not put load-bearing content there.
 
+When adding or changing a platform claim, cite an authoritative public source
+where available. A short `## References` section can link the relevant API,
+property documentation, or public source definition. If no such source is
+available, identify the evidence or policy basis explicitly; do not imply an
+official guarantee. Keep the actual rule and its exceptions in normative
+sections, not only in references. See [sources and examples](../docs/contributing.md#sources-and-examples).
+
 ## No fenced code blocks
 
-Knowledge files do not contain code. Samples live as **sibling files** next to the article — `<slug>.good.al.txt`, `<slug>.bad.al.txt`, etc. — in the same knowledge-layer folder. See `skills/read.md` for the full convention. This keeps knowledge files retrieval-friendly and prevents code from drifting out of sync with BC platform changes buried inside prose.
+Knowledge files do not contain code. Samples live as **sibling files** next to the article — `<slug>.good.al`, `<slug>.bad.al`, etc. — in the same knowledge-layer folder. See `skills/read.md` for the full convention. This keeps knowledge files retrieval-friendly and prevents code from drifting out of sync with BC platform changes buried inside prose.
 
 ## Choosing frontmatter values
 
@@ -80,8 +87,10 @@ Knowledge files do not contain code. Samples live as **sibling files** next to t
 
 ## Choosing a layer
 
-- **`/microsoft/knowledge/<domain>/`** — platform-endorsed guidance. Authored or approved by the BC platform team. Use this layer only when the guidance reflects a platform guarantee or official recommendation.
-- **`/community/knowledge/<domain>/`** — shared community patterns. The default layer for contributions from outside the platform team. Content here can be promoted to `/microsoft/` once it proves itself.
+In the shared upstream layers, keep an action skill and the canonical knowledge it acts on in the same layer. The action skill's ownership determines the destination; the author's affiliation does not. Do not use `/community/knowledge/` as a staging area for articles in a domain already owned by a Microsoft-endorsed skill. A cross-layer split is acceptable only as a short-lived migration state while the skill or corpus is being promoted. Custom overrides are intentionally exempt because they extend shared skills from a consumer fork.
+
+- **`/microsoft/knowledge/<domain>/`** — guidance owned by a Microsoft-endorsed action skill. It has been approved as platform-endorsed guidance, whether authored by Microsoft or contributed by the community.
+- **`/community/knowledge/<domain>/`** — knowledge that accompanies a community-owned action skill. Promote the knowledge with the skill when that skill becomes Microsoft-endorsed.
 - **`/custom/knowledge/<domain>/`** — partner or customer overrides. Generally does not appear in the BCQuality repository itself; `/custom/` lives in consumer repositories.
 
 ### Writing to `/custom/` — fork precondition
@@ -91,7 +100,7 @@ The `/custom/` layer is **empty by default** in the upstream `microsoft/BCQualit
 Before authoring or scaffolding any file under `/custom/knowledge/` or `/custom/skills/`, an author — human or agent — MUST confirm the working repository is **not** `microsoft/BCQuality`:
 
 - Check the `origin` remote: `git remote get-url origin`. If it points at `github.com/microsoft/BCQuality`, stop — you are in the upstream repo, not a fork.
-- If you are in the upstream repo, do not write the file. Either fork the repository (or clone it into your organization's own repo) and add the custom content there, or — if the guidance is genuinely shareable — author it in `/community/knowledge/` instead.
+- If you are in the upstream repo, do not write the custom file. Either fork the repository (or clone it into your organization's own repo) and add the custom content there, or — if the guidance is genuinely shareable — use the shared layer that owns the domain, following *Choosing a layer* above. Community is not a staging area for Microsoft-owned domains.
 
 A pull request that adds `/custom/` content to `microsoft/BCQuality` will be **automatically closed** by the `Guard custom layer` workflow. Validate the fork precondition first so authoring effort is not wasted on a PR that cannot be merged.
 
@@ -107,7 +116,8 @@ Before opening a pull request:
 - Frontmatter `domain` exactly matches the containing domain folder.
 - File is in the correct layer and domain folder.
 - Name is kebab-case and descriptive.
-- Every companion sample is referenced by filename from the article, and every referenced sample exists.
-- Every review-leaf domain has at least one article with both `.good.al.txt` and `.bad.al.txt` companions; the evaluation harness derives positive and clean controls from that convention automatically.
+- Every companion sample has a clickable relative link retaining its backticked filename, and every referenced sample exists.
+- Platform claims link supporting sources where available; policy or empirical guidance is identified as such.
+- Every review-leaf domain has at least one article with both `.good.al` and `.bad.al` companions; the evaluation harness derives positive and clean controls from that convention automatically.
 
 Agents scaffolding new files SHOULD run this checklist programmatically before emitting the file.
